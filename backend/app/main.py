@@ -11,6 +11,10 @@ from backend.app.core.security import hash_pin
 from backend.app.database import Base, SessionLocal, engine
 from backend.app.staff.model import Staff
 
+# Routers are imported from their modules directly (not re-exported from the
+# package __init__) — that keeps `core.deps -> staff.model` from cycling back
+# through `staff/__init__ -> staff.router -> core.deps`.
+# Importing each router also imports its models, registering the tables.
 from backend.app.devices.router import router as devices_router
 from backend.app.health.router import router as health_router
 from backend.app.menu.router import router as menu_router
@@ -26,7 +30,7 @@ def seed_default_manager() -> None:
 
     db = SessionLocal()
     try:
-        stmt = select(Staff).where(Staff.role == "manager", Staff.active == True)
+        stmt = select(Staff).where(Staff.role == "manager", Staff.active.is_(True))
         if db.execute(stmt).scalar_one_or_none() is not None:
             return  # already seeded
 
@@ -48,7 +52,10 @@ async def lifespan(app: FastAPI):
     # Phase 1 shortcut: create tables on startup.
     # TODO before production: switch to Alembic migrations.
     Base.metadata.create_all(bind=engine)
+    
+    # Auto-seed the initial admin account if configured in .env
     seed_default_manager()
+    
     yield
 
 

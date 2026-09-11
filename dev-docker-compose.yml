@@ -20,8 +20,9 @@ services:
       context: ./backend
       dockerfile: ../.docker/dev/dev-backend.Dockerfile
     volumes:
-      - ./backend:/app
+      - ./backend:/backend
     environment:
+      PYTHONPATH: / 
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
