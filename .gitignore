@@ -1,0 +1,161 @@
+# =============================================================================
+# Harbor POS — root .gitignore
+# One file, covers backend/ (Python), app/ (Expo), web/ (Vite).
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Secrets — the single most important block
+# -----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials.json
+
+# -----------------------------------------------------------------------------
+# Python (backend/)
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtualenvs
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Packaging / build
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+pip-wheel-metadata/
+
+# Test & type-check caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
+# Local DB dumps (nightly pg_dump output on the box)
+*.sql
+*.sql.gz
+*.dump
+backups/
+!migrations/**/*.sql
+
+# SQLite files, if ever used locally
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Local-only docker overrides
+docker-compose.override.yml
+
+# -----------------------------------------------------------------------------
+# Node / JS (app/ and web/)
+# -----------------------------------------------------------------------------
+node_modules/
+.yarn/
+.pnp.*
+.yarnrc.yml
+
+# Build output
+dist/
+build/
+dist-ssr/
+web-build/
+*.tsbuildinfo
+*.local
+
+# Vite
+.vite/
+
+# Metro / Expo
+.expo/
+.expo-shared/
+expo-env.d.ts
+.metro-health-check*
+.metro-cache/
+
+# Native projects (Expo CNG regenerates these via EAS/prebuild)
+# Delete the next two lines if you run `expo prebuild` and commit native code.
+android/
+ios/
+
+# EAS / native build artifacts
+.eas/
+*.apk
+*.aab
+*.ipa
+*.jks
+*.keystore
+!debug.keystore
+*.mobileprovision
+*.orig.*
+
+# Frontend test / lint caches
+.jest/
+.eslintcache
+.stylelintcache
+
+# -----------------------------------------------------------------------------
+# Logs & temp (any language)
+# -----------------------------------------------------------------------------
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# -----------------------------------------------------------------------------
+# OS junk
+# -----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# -----------------------------------------------------------------------------
+# Editors / IDEs
+# -----------------------------------------------------------------------------
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.ipynb_checkpoints/
+
+# -----------------------------------------------------------------------------
+# Local dev scratch
+# -----------------------------------------------------------------------------
+scratch/
+playground/
