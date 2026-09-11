@@ -1,5 +1,6 @@
 // The ONE place the server URL lives.
-export const BASE_URL = "https://pos.nimbusurf.com";
+export const BASE_URL =
+  process.env.EXPO_PUBLIC_BASE_URL;
 
 async function request<T>(
   path: string,
