@@ -4,18 +4,18 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import Base, engine
+from backend.app.database import Base, engine
 
 # Routers are imported from their modules directly (not re-exported from the
 # package __init__) — that keeps `core.deps -> staff.model` from cycling back
 # through `staff/__init__ -> staff.router -> core.deps`.
 # Importing each router also imports its models, registering the tables.
-from app.devices.router import router as devices_router
-from app.health.router import router as health_router
-from app.menu.router import router as menu_router
-from app.orders.router import router as orders_router
-from app.payments.router import router as payments_router
-from app.staff.router import router as staff_router
+from backend.app.devices.router import router as devices_router
+from backend.app.health.router import router as health_router
+from backend.app.menu.router import router as menu_router
+from backend.app.orders.router import router as orders_router
+from backend.app.payments.router import router as payments_router
+from backend.app.staff.router import router as staff_router
 
 
 @asynccontextmanager

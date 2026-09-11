@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.database import get_db
-from app.devices.model import Device
-from app.devices.schema import DeviceOut, DeviceRegister
+from backend.app.database import get_db
+from backend.app.devices.model import Device
+from backend.app.devices.schema import DeviceOut, DeviceRegister
 
 router = APIRouter()
 

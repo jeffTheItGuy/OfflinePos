@@ -8,7 +8,7 @@ import json
 
 from sqlalchemy.orm import Session
 
-from app.idempotency.model import IdempotencyKey
+from backend.app.idempotency.model import IdempotencyKey
 
 
 def get_cached_response(db: Session, key: str) -> dict | None:

@@ -2,11 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.deps import require_manager
-from app.core.security import hash_pin, verify_pin
-from app.database import get_db
-from app.staff.model import Staff
-from app.staff.schema import StaffCreate, StaffLogin, StaffOut
+from backend.app.core.deps import require_manager
+from backend.app.core.security import hash_pin, verify_pin
+from backend.app.database import get_db
+from backend.app.staff.model import Staff
+from backend.app.staff.schema import StaffCreate, StaffLogin, StaffOut
 
 router = APIRouter()
 

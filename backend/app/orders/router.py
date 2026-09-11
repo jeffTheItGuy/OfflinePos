@@ -5,11 +5,11 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.database import get_db
-from app.idempotency.service import get_cached_response, store_response
-from app.orders.model import Order, OrderItem
-from app.orders.schema import OrderCreate, OrderOut
-from app.orders.service import UnknownDeviceError, allocate_order_no
+from backend.app.database import get_db
+from backend.app.idempotency.service import get_cached_response, store_response
+from backend.app.orders.model import Order, OrderItem
+from backend.app.orders.schema import OrderCreate, OrderOut
+from backend.app.orders.service import UnknownDeviceError, allocate_order_no
 
 router = APIRouter()
 
