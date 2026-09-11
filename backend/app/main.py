@@ -1,15 +1,16 @@
 """FastAPI entry point for Harbor POS."""
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import select
 
-from backend.app.database import Base, engine
+from backend.app.config import settings
+from backend.app.core.security import hash_pin
+from backend.app.database import Base, SessionLocal, engine
+from backend.app.staff.model import Staff
 
-# Routers are imported from their modules directly (not re-exported from the
-# package __init__) — that keeps `core.deps -> staff.model` from cycling back
-# through `staff/__init__ -> staff.router -> core.deps`.
-# Importing each router also imports its models, registering the tables.
 from backend.app.devices.router import router as devices_router
 from backend.app.health.router import router as health_router
 from backend.app.menu.router import router as menu_router
@@ -18,11 +19,36 @@ from backend.app.payments.router import router as payments_router
 from backend.app.staff.router import router as staff_router
 
 
+def seed_default_manager() -> None:
+    """Create the initial manager if DEFAULT_MANAGER_PIN is set and none exists yet."""
+    if not settings.DEFAULT_MANAGER_PIN:
+        return
+
+    db = SessionLocal()
+    try:
+        stmt = select(Staff).where(Staff.role == "manager", Staff.active == True)
+        if db.execute(stmt).scalar_one_or_none() is not None:
+            return  # already seeded
+
+        db.add(Staff(
+            id=str(uuid.uuid4()),
+            name=settings.DEFAULT_MANAGER_NAME,
+            role="manager",
+            active=True,
+            pin_hash=hash_pin(settings.DEFAULT_MANAGER_PIN),
+        ))
+        db.commit()
+        print(f"[startup] Seeded default manager '{settings.DEFAULT_MANAGER_NAME}'")
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Phase 1 shortcut: create tables on startup.
     # TODO before production: switch to Alembic migrations.
     Base.metadata.create_all(bind=engine)
+    seed_default_manager()
     yield
 
 
