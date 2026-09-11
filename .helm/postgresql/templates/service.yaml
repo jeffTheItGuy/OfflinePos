@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: offlinepos-postgresql-svc
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: offlinepos-postgresql
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: offlinepos-postgresql
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.port }}
+      name: postgres

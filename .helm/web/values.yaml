@@ -1,0 +1,53 @@
+namespace: offlinepos
+replicaCount: 1
+
+image:
+  repository: offlinepos-web
+  tag: ""
+  pullPolicy: Never
+
+service:
+  port: 80
+  type: ClusterIP
+
+ingress:
+  className: traefik
+  host: offlinepos.nimbusurf.com
+  path: /
+  tlsSecretName: offlinepos-nimbusurf-tls
+
+env:
+  NODE_ENV: "production"
+
+resources:
+  limits:
+    cpu: "300m"
+    memory: "384Mi"
+  requests:
+    cpu: "50m"
+    memory: "128Mi"
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 101
+  runAsGroup: 101
+  fsGroup: 101
+
+networkPolicy:
+  allowedTo:
+    - app: offlinepos-api
+      port: 8000
+
+probes:
+  readiness:
+    path: "/"
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  liveness:
+    path: "/"
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3

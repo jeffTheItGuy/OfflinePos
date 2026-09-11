@@ -1,0 +1,54 @@
+namespace: offlinepos
+replicaCount: 1
+
+image:
+  repository: offlinepos-api
+  tag: ""
+  pullPolicy: Never
+
+service:
+  port: 8000
+  type: ClusterIP
+
+envFrom:
+  - secretRef:
+      name: offlinepos-secrets
+
+env:
+  PORT: "8000"
+  POSTGRES_DB: "offlinepos"
+
+resources:
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+
+networkPolicy:
+  allowedFrom:
+    - app: offlinepos-web
+  allowedTo:
+    - app: offlinepos-postgresql
+      port: 5432
+
+probes:
+  readiness:
+    path: "/health"
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  liveness:
+    path: "/health"
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
