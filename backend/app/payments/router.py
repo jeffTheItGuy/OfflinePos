@@ -4,17 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal, get_db
-from app.idempotency.service import get_cached_response, store_response
-from app.orders.model import Order
-from app.payments.model import Payment
-from app.payments.schema import (
+from backend.app.database import SessionLocal, get_db
+from backend.app.idempotency.service import get_cached_response, store_response
+from backend.app.orders.model import Order
+from backend.app.payments.model import Payment
+from backend.app.payments.schema import (
     PaymentCreate,
     PaymentOut,
     StripeIntentIn,
     StripeIntentOut,
 )
-from app.payments.service import (
+from backend.app.payments.service import (
     StripeNotConfigured,
     create_intent,
     record_card_payment,

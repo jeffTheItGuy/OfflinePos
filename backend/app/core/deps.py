@@ -6,8 +6,8 @@ against the staff table. Replace with proper tokens before multi-store.
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
-from app.database import get_db
-from app.staff.model import Staff
+from backend.app.database import get_db
+from backend.app.staff.model import Staff
 
 
 def require_manager(

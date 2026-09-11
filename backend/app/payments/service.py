@@ -5,9 +5,9 @@ hard dependency until card payments are actually switched on.
 """
 from sqlalchemy.orm import Session
 
-from app.config import settings
-from app.orders.model import Order
-from app.payments.model import Payment
+from backend.app.config import settings
+from backend.app.orders.model import Order
+from backend.app.payments.model import Payment
 
 
 class StripeNotConfigured(Exception):

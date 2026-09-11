@@ -1,56 +1,50 @@
-
-
 services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: harbor
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # Note: In production, it is safer to NOT expose the DB port to the host.
+    # If you need it for backups, uncomment the lines below.
+    # ports:
+    #   - "${DB_PORT:-5432}:5432"
     volumes:
-      - pgdata_dev:/var/lib/postgresql/data
+      - pgdata_prod:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: always
 
   api:
     build:
       context: ./backend
-      dockerfile: ../.docker/dev/dev-backend.Dockerfile
-    volumes:
-      - ./backend:/app
+      dockerfile: ../.docker/prod/prod-backend.Dockerfile
     environment:
-      DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/harbor
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy
+    restart: always
 
   web:
     build:
       context: ./web
-      dockerfile: ../.docker/dev/dev-web.Dockerfile
-    volumes:
-      - ./web:/app
-      # Named volume keeps container-installed node_modules from being
-      # shadowed by the ./web bind mount above.
-      - web_node_modules:/app/node_modules
+      dockerfile: ../.docker/prod/prod-web.Dockerfile
     environment:
-      # The Vite proxy runs inside this container, so "localhost" would be
-      # the web container itself. Target the api service by name.
-      VITE_API_PROXY: http://api:8000
+      VITE_API_PROXY: ${VITE_API_PROXY:-http://api:8000}
     ports:
-      - "5173:5173"
+      # Defaulting to port 80 for production web traffic
+      - "${WEB_PORT:-80}:80" 
     depends_on:
       - api
+    restart: always
 
 volumes:
-  pgdata_dev:
-  web_node_modules:
+  pgdata_prod:

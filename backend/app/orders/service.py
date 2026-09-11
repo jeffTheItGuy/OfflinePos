@@ -10,7 +10,7 @@ one-line import change in the router if you'd rather.
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.devices.model import Device
+from backend.app.devices.model import Device
 
 
 class UnknownDeviceError(Exception):

@@ -2,11 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.deps import require_manager
-from app.database import get_db
-from app.menu.model import MenuItem
-from app.menu.schema import MenuItemCreate, MenuItemOut, MenuItemUpdate
-from app.staff.model import Staff
+from backend.app.core.deps import require_manager
+from backend.app.database import get_db
+from backend.app.menu.model import MenuItem
+from backend.app.menu.schema import MenuItemCreate, MenuItemOut, MenuItemUpdate
+from backend.app.staff.model import Staff
 
 router = APIRouter()
 
