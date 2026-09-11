@@ -1,0 +1,44 @@
+"""JSON contract for orders — this is exactly what the Expo sync engine sends."""
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class OrderItemIn(BaseModel):
+    menu_item_id: str | None = None
+    name: str
+    quantity: int = Field(ge=1)
+    price_cents: int = Field(ge=0)
+    notes: str = ""
+
+
+class OrderCreate(BaseModel):
+    # Device-generated UUID. Doubles as the order id AND the idempotency key,
+    # so a retried sync can never create a duplicate.
+    idempotency_key: str
+    device_id: str
+    staff_id: str | None = None
+    table_name: str
+    items: list[OrderItemIn] = Field(min_length=1)
+
+
+class OrderItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    menu_item_id: str | None
+    name: str
+    quantity: int
+    price_cents: int
+    notes: str
+
+
+class OrderOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    order_no: str
+    table_name: str
+    status: str
+    total_cents: int
+    created_at: datetime
+    items: list[OrderItemOut]
