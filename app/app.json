@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "Harbor POS",
+    "slug": "harbor-pos",
+    "version": "0.1.0",
+    "orientation": "landscape",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"],
+    "android": { "package": "com.nimbusurf.harborpos" },
+    "ios": { "bundleIdentifier": "com.nimbusurf.harborpos" },
+    "plugins": ["expo-sqlite"]
+  }
+}
