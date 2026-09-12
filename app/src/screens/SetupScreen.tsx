@@ -1,34 +1,47 @@
 import React, { useState } from "react";
 import {
-  View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Alert,
+  View,
 } from "react-native";
+
 import { api } from "../api/client";
 import { useAuthStore } from "../store/authStore";
 import { setMeta } from "../db/migrations";
 
 export function SetupScreen() {
   const setDevice = useAuthStore((s) => s.setDevice);
+
   const [name, setName] = useState("");
   const [prefix, setPrefix] = useState("T1");
   const [busy, setBusy] = useState(false);
 
   async function register() {
-    if (!name.trim() || !prefix.trim()) return;
+    const cleanName = name.trim();
+    const cleanPrefix = prefix.trim().toUpperCase();
+
+    if (!cleanName || !cleanPrefix) {
+      Alert.alert("Missing info", "Enter a device name and prefix.");
+      return;
+    }
+
     setBusy(true);
+
     try {
-      const d = await api.registerDevice(
-        name.trim(),
-        prefix.trim().toUpperCase(),
-      );
+      const d = await api.registerDevice(cleanName, cleanPrefix);
+
       setDevice(d);
+
       await setMeta("device_id", d.id);
       await setMeta("device_name", d.name);
       await setMeta("device_prefix", d.order_no_prefix);
+
       await setMeta(
         "device_salt",
         Math.random().toString(36).slice(2) + Date.now(),
@@ -41,50 +54,91 @@ export function SetupScreen() {
   }
 
   return (
-    <View style={styles.wrap}>
-      <Text style={styles.h1}>Set up this device</Text>
-      <Text style={styles.p}>
-        Give this tablet a name and a unique order-number prefix
-        (e.g. T1, T2, Patio).
-      </Text>
+    <KeyboardAvoidingView
+      style={styles.keyboard}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.wrap}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.card}>
+          <Text style={styles.h1}>Set up this device</Text>
 
-      <Text style={styles.label}>Device name</Text>
-      <TextInput
-        style={styles.input}
-        value={name}
-        onChangeText={setName}
-        placeholder="Tablet 1"
-        autoCapitalize="words"
-      />
+          <Text style={styles.p}>
+            Give this tablet a name and a unique order-number prefix (e.g. T1,
+            T2, Patio).
+          </Text>
 
-      <Text style={styles.label}>Order prefix</Text>
-      <TextInput
-        style={styles.input}
-        value={prefix}
-        onChangeText={setPrefix}
-        autoCapitalize="characters"
-        maxLength={6}
-      />
+          <Text style={styles.label}>Device name</Text>
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            placeholder="Tablet 1"
+            autoCapitalize="words"
+          />
 
-      <TouchableOpacity style={styles.btn} onPress={register} disabled={busy}>
-        <Text style={styles.btnText}>
-          {busy ? "Registering…" : "Register device"}
-        </Text>
-      </TouchableOpacity>
-    </View>
+          <Text style={styles.label}>Order prefix</Text>
+          <TextInput
+            style={styles.input}
+            value={prefix}
+            onChangeText={setPrefix}
+            autoCapitalize="characters"
+            maxLength={6}
+          />
+
+          <TouchableOpacity
+            style={[styles.btn, busy && { opacity: 0.6 }]}
+            onPress={register}
+            disabled={busy}
+          >
+            <Text style={styles.btnText}>
+              {busy ? "Registering…" : "Register device"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
+  keyboard: {
     flex: 1,
-    padding: 32,
-    justifyContent: "center",
     backgroundColor: "#f8fafc",
   },
-  h1: { fontSize: 26, fontWeight: "800", marginBottom: 8 },
-  p: { color: "#475569", marginBottom: 24 },
-  label: { fontWeight: "700", marginTop: 16, marginBottom: 6 },
+
+  wrap: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+    backgroundColor: "#f8fafc",
+  },
+
+  card: {
+    width: "100%",
+    maxWidth: 520,
+  },
+
+  h1: {
+    fontSize: 28,
+    fontWeight: "800",
+    marginBottom: 8,
+  },
+
+  p: {
+    color: "#475569",
+    marginBottom: 24,
+  },
+
+  label: {
+    fontWeight: "700",
+    marginTop: 16,
+    marginBottom: 6,
+  },
+
   input: {
     borderWidth: 1,
     borderColor: "#cbd5e1",
@@ -93,6 +147,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     backgroundColor: "#fff",
   },
+
   btn: {
     marginTop: 32,
     backgroundColor: "#0f172a",
@@ -100,5 +155,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
   },
-  btnText: { color: "#fff", fontWeight: "800", fontSize: 16 },
+
+  btnText: {
+    color: "#fff",
+    fontWeight: "800",
+    fontSize: 16,
+  },
 });

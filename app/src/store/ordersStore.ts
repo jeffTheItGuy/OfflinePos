@@ -16,7 +16,7 @@ interface OrdersState {
 
 export const useOrdersStore = create<OrdersState>((set, get) => ({
   orders: [],
-
+  
   reload: async () => {
     const db = await getDb();
     const rows = await db.getAllAsync<{
@@ -25,15 +25,16 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
       local_no: string;
       table_name: string;
       status: string;
+      payment_status: string | null;
       total_cents: number;
       created_at: string;
     }>("SELECT * FROM orders ORDER BY created_at DESC LIMIT 200");
-
+    
     const orders: Order[] = [];
     for (const r of rows) {
       const items = await db.getAllAsync<OrderItem>(
-        `SELECT menu_item_id, name, quantity, price_cents, notes
-           FROM order_items WHERE order_id = ?`,
+        `SELECT menu_item_id, name, quantity, price_cents, notes 
+         FROM order_items WHERE order_id = ?`,
         [r.id],
       );
       orders.push({
@@ -41,6 +42,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
         order_no: r.order_no ?? r.local_no,
         table_name: r.table_name,
         status: r.status as Order["status"],
+        payment_status: (r.payment_status ?? "unpaid") as Order["payment_status"],
         total_cents: r.total_cents,
         created_at: r.created_at,
         items,
@@ -60,7 +62,6 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
     const id = uuid();
     const total = cart.totalCents();
     const createdAt = new Date().toISOString();
-
     const payload = {
       idempotency_key: id,
       device_id: deviceId,
@@ -78,24 +79,15 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
     const db = await getDb();
     await db.withTransactionAsync(async () => {
       await db.runAsync(
-        `INSERT INTO orders
-           (id, order_no, local_no, table_name, status,
-            total_cents, staff_id, created_at, synced, payload)
-         VALUES (?, NULL, ?, ?, 'sent', ?, ?, ?, 0, ?)`,
-        [
-          id,
-          localNo,
-          cart.table,
-          total,
-          staff?.id ?? null,
-          createdAt,
-          JSON.stringify(payload),
-        ],
+        `INSERT INTO orders 
+         (id, order_no, local_no, table_name, status, payment_status, total_cents, staff_id, created_at, synced, payload) 
+         VALUES (?, NULL, ?, ?, 'sent', 'unpaid', ?, ?, ?, 0, ?)`,
+        [id, localNo, cart.table, total, staff?.id ?? null, createdAt, JSON.stringify(payload)],
       );
       for (const l of cart.lines) {
         await db.runAsync(
-          `INSERT INTO order_items
-             (order_id, menu_item_id, name, quantity, price_cents, notes)
+          `INSERT INTO order_items 
+           (order_id, menu_item_id, name, quantity, price_cents, notes) 
            VALUES (?, ?, ?, ?, ?, ?)`,
           [id, l.menu_item_id, l.name, l.quantity, l.price_cents, l.notes],
         );
@@ -112,6 +104,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
       order_no: localNo,
       table_name: payload.table_name,
       status: "sent",
+      payment_status: "unpaid",
       total_cents: total,
       created_at: createdAt,
       items: payload.items,
@@ -127,15 +120,17 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
       staff_id: staff?.id ?? null,
       amount_cents: amountCents,
     };
+
     const db = await getDb();
-    await db.runAsync("UPDATE orders SET status='paid' WHERE id = ?", [orderId]);
+    // FIX: Update payment_status, NOT the kitchen status!
+    await db.runAsync("UPDATE orders SET payment_status='paid' WHERE id = ?", [orderId]);
+    
     await enqueue(id, "payment", payload);
     await get().reload();
     runSync("cash");
   },
 }));
 
-// Local provisional order number for offline-submitted orders.
 export async function nextLocalNo(prefix: string): Promise<string> {
   const cur = Number((await getMeta("local_seq")) ?? "0");
   const next = cur + 1;
@@ -143,7 +138,6 @@ export async function nextLocalNo(prefix: string): Promise<string> {
   return `${prefix}-L${next}`;
 }
 
-// Tiny RFC4122-ish id; fine for idempotency keys on one device.
 function uuid(): string {
   const h = () =>
     Math.floor(Math.random() * 0x10000).toString(16).padStart(4, "0");

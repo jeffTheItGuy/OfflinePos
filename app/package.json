@@ -1,24 +1,30 @@
 {
   "name": "harbor-pos-app",
-  "version": "0.1.0",
-  "main": "node_modules/expo/AppEntry.js",
+  "version": "0.2.0",
+  "main": "index.ts",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
-    "ios": "expo start --ios"
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "expo": "~51.0.0",
-    "expo-crypto": "~13.0.2",
-    "expo-sqlite": "~14.0.6",
-    "expo-status-bar": "~1.12.1",
-    "react": "18.2.0",
-    "react-native": "0.74.5",
-    "@react-native-community/netinfo": "11.3.1",
+    "@react-native-community/netinfo": "12.0.1",
+    "expo": "~57.0.17",
+    "expo-crypto": "*",
+    "expo-sqlite": "*",
+    "expo-status-bar": "*",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
     "zustand": "^4.5.5"
   },
   "devDependencies": {
-    "@types/react": "~18.2.79",
-    "typescript": "~5.3.3"
-  }
+    "@babel/core": "^7.25.0",
+    "@types/react": "~19.2.0",
+    "babel-preset-expo": "^57.0.11",
+    "typescript": "~6.0.3"
+  },
+  "private": true
 }

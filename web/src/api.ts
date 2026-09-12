@@ -1,7 +1,5 @@
-import type { MenuItem, Order, Staff } from "./types";
+import type { MenuItem, Order, OrderStatus, Staff } from "./types";
 
-// Empty base = same-origin. Caddy in prod and the Vite proxy in dev both
-// route the API paths correctly, so no env var is required.
 const BASE = "";
 
 export class ApiError extends Error {
@@ -18,21 +16,36 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       ...(init.headers ?? {}),
     },
   });
+
   const text = await res.text();
   const body = text ? JSON.parse(text) : null;
+
   if (!res.ok) {
     throw new ApiError(res.status, body?.detail ?? res.statusText);
   }
+
   return body as T;
 }
 
 export const api = {
-  listOrders: (status?: "sent" | "paid" | "void", limit = 100) => {
+  listOrders: (status?: string, limit = 100) => {
     const q = new URLSearchParams();
+
     if (status) q.set("status", status);
     q.set("limit", String(limit));
+
     return request<Order[]>(`/orders?${q.toString()}`);
   },
+
+  listKitchenOrders: (limit = 50) => {
+    return request<Order[]>(`/orders/kitchen?limit=${limit}`);
+  },
+
+  updateOrderStatus: (id: string, status: OrderStatus) =>
+    request<Order>(`/orders/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
 
   listMenu: () => request<MenuItem[]>("/menu"),
 
@@ -57,7 +70,9 @@ export const api = {
   updateMenuItem: (
     staffId: string,
     id: string,
-    payload: Partial<Pick<MenuItem, "name" | "price_cents" | "category" | "available">>,
+    payload: Partial<
+      Pick<MenuItem, "name" | "price_cents" | "category" | "available">
+    >,
   ) =>
     request<MenuItem>(`/menu/${id}`, {
       method: "PATCH",
@@ -70,6 +85,7 @@ export const api = {
       method: "DELETE",
       headers: { "X-Staff-Id": staffId },
     });
+
     if (!res.ok && res.status !== 204) {
       throw new ApiError(res.status, res.statusText);
     }

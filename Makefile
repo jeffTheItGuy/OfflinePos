@@ -2,9 +2,11 @@ DOCKER_COMPOSE ?= docker compose
 
 DEV_COMPOSE_FILE ?= dev-docker-compose.yml
 PROD_COMPOSE_FILE ?= prod-docker-compose.yml
+APP_COMPOSE_FILE ?= app-docker-compose.yml
 
 COMPOSE_DEV := $(DOCKER_COMPOSE) -f $(DEV_COMPOSE_FILE)
 COMPOSE_PROD := $(DOCKER_COMPOSE) -f $(PROD_COMPOSE_FILE)
+COMPOSE_APP := $(DOCKER_COMPOSE) -f $(APP_COMPOSE_FILE)
 
 # If your Docker Compose version does not support --wait, use:
 # make WAIT_FLAG= dev-deploy-api
@@ -36,27 +38,28 @@ dev-restart-api:
 	$(COMPOSE_DEV) restart api
 
 
+
 ############################
-# Tablet app (Expo)
+# Tablet app (Expo, via nvm)
 ############################
 
-# Metro bundler — long-lived interactive process with the QR code.
-# Stop with Ctrl+C. Requires the api container (make dev-up) to be running.
 app:
-	@# Determine host IP for REACT_NATIVE_PACKAGER_HOSTNAME
-	@if [ "$$(uname -s)" = "Linux" ]; then \
-		HOST_IP=$$(hostname -I | awk '{print $$1}'); \
-	elif [ "$$(uname -s)" = "Darwin" ]; then \
-		HOST_IP="host.docker.internal"; \
-	else \
-		HOST_IP="host.docker.internal"; \
-	fi; \
-	echo "Using host IP: $$HOST_IP for REACT_NATIVE_PACKAGER_HOSTNAME"; \
-	REACT_NATIVE_PACKAGER_HOSTNAME=$$HOST_IP docker-compose up --build
+	@cd app && \
+	export NVM_DIR="$$HOME/.nvm" && \
+	[ -s "$$NVM_DIR/nvm.sh" ] && . "$$NVM_DIR/nvm.sh" && \
+	(nvm use 22 >/dev/null 2>&1 || nvm install 22) && \
+	node --version && \
+	if [ -f package-lock.json ]; then npm ci; else npm install; fi && \
+	npx expo start --clear
 
-# Fallback for networks that block phone<->computer traffic (routes via Expo's servers).
 app-tunnel:
-	cd app && npx expo start --tunnel
+	@cd app && \
+	export NVM_DIR="$$HOME/.nvm" && \
+	[ -s "$$NVM_DIR/nvm.sh" ] && . "$$NVM_DIR/nvm.sh" && \
+	(nvm use 22 >/dev/null 2>&1 || nvm install 22) && \
+	node --version && \
+	if [ -f package-lock.json ]; then npm ci; else npm install; fi && \
+	npx expo start --tunnel --clear
 
 
 ############################
