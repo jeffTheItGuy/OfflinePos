@@ -35,7 +35,8 @@ export interface Order {
   id: string;
   order_no: string;
   table_name: string;
-  status: "sent" | "paid" | "void";
+  status: "sent" | "preparing" | "ready" | "completed" | "void";
+  payment_status: "unpaid" | "paid" | "refunded";
   total_cents: number;
   created_at: string;
   items: OrderItem[];
@@ -45,9 +46,9 @@ export type OutboxKind = "order" | "payment";
 export type OutboxStatus = "pending" | "syncing" | "done" | "failed";
 
 export interface OutboxItem {
-  id: string;             // idempotency key (device UUID)
+  id: string;
   kind: OutboxKind;
-  payload: string;        // JSON
+  payload: string;
   status: OutboxStatus;
   attempts: number;
   next_attempt_at: number;

@@ -1,5 +1,4 @@
 from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -20,12 +19,3 @@ class PaymentOut(BaseModel):
     amount_cents: int
     status: str
     created_at: datetime
-
-
-class StripeIntentIn(BaseModel):
-    order_id: str
-
-
-class StripeIntentOut(BaseModel):
-    client_secret: str
-    amount_cents: int

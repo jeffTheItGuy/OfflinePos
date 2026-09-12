@@ -14,11 +14,22 @@ export interface OrderItem {
   notes: string;
 }
 
+export type OrderStatus =
+  | "sent"
+  | "preparing"
+  | "ready"
+  | "completed"
+  | "paid"
+  | "void";
+
+export type PaymentStatus = "unpaid" | "paid" | "refunded";
+
 export interface Order {
   id: string;
   order_no: string;
   table_name: string;
-  status: "sent" | "paid" | "void";
+  status: OrderStatus;
+  payment_status?: PaymentStatus;
   total_cents: number;
   created_at: string;
   items: OrderItem[];

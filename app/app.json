@@ -2,12 +2,19 @@
   "expo": {
     "name": "Harbor POS",
     "slug": "harbor-pos",
-    "version": "0.1.0",
-    "orientation": "landscape",
+    "version": "0.2.0",
+    "orientation": "default",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": ["**/*"],
-    "android": { "package": "com.nimbusurf.harborpos" },
-    "ios": { "bundleIdentifier": "com.nimbusurf.harborpos" },
-    "plugins": ["expo-sqlite"]
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.nimbusurf.harborpos",
+      "edgeToEdgeEnabled": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.nimbusurf.harborpos"
+    }
   }
 }

@@ -1,15 +1,12 @@
 import { getDb } from "./database";
 
-// Run once at app start. Every CREATE uses IF NOT EXISTS so it's safe to re-run.
 export async function runMigrations(): Promise<void> {
   const db = await getDb();
-
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS device_settings (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
-
     CREATE TABLE IF NOT EXISTS menu_items (
       id          TEXT PRIMARY KEY,
       name        TEXT NOT NULL,
@@ -18,27 +15,25 @@ export async function runMigrations(): Promise<void> {
       available   INTEGER NOT NULL DEFAULT 1,
       version     INTEGER NOT NULL DEFAULT 1
     );
-
     CREATE TABLE IF NOT EXISTS staff_cache (
       id           TEXT PRIMARY KEY,
       name         TEXT NOT NULL,
       role         TEXT NOT NULL,
       pin_verifier TEXT
     );
-
     CREATE TABLE IF NOT EXISTS orders (
-      id          TEXT PRIMARY KEY,
-      order_no    TEXT,
-      local_no    TEXT NOT NULL,
-      table_name  TEXT NOT NULL,
-      status      TEXT NOT NULL,
-      total_cents INTEGER NOT NULL,
-      staff_id    TEXT,
-      created_at  TEXT NOT NULL,
-      synced      INTEGER NOT NULL DEFAULT 0,
-      payload     TEXT NOT NULL
+      id             TEXT PRIMARY KEY,
+      order_no       TEXT,
+      local_no       TEXT NOT NULL,
+      table_name     TEXT NOT NULL,
+      status         TEXT NOT NULL,
+      payment_status TEXT NOT NULL DEFAULT 'unpaid',
+      total_cents    INTEGER NOT NULL,
+      staff_id       TEXT,
+      created_at     TEXT NOT NULL,
+      synced         INTEGER NOT NULL DEFAULT 0,
+      payload        TEXT NOT NULL
     );
-
     CREATE TABLE IF NOT EXISTS order_items (
       order_id     TEXT NOT NULL,
       menu_item_id TEXT,
@@ -48,7 +43,6 @@ export async function runMigrations(): Promise<void> {
       notes        TEXT NOT NULL DEFAULT '',
       FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
     );
-
     CREATE TABLE IF NOT EXISTS outbox (
       id              TEXT PRIMARY KEY,
       kind            TEXT NOT NULL,
@@ -59,18 +53,22 @@ export async function runMigrations(): Promise<void> {
       last_error      TEXT,
       created_at      INTEGER NOT NULL
     );
-
     CREATE INDEX IF NOT EXISTS idx_outbox_due
       ON outbox(status, next_attempt_at);
-
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
   `);
+
+  // Migration for existing installs: add the column if it doesn't exist yet
+  try {
+    await db.execAsync(`ALTER TABLE orders ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'unpaid'`);
+  } catch (e) {
+    // Column already exists, ignore
+  }
 }
 
-// Small typed key-value helper over the meta table.
 export async function getMeta(key: string): Promise<string | null> {
   const db = await getDb();
   const row = await db.getFirstAsync<{ value: string }>(

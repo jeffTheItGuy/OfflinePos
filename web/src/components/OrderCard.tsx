@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import type { Order } from "../types";
 
-export function OrderCard({ order }: { order: Order }) {
-  // Recompute the age every 30s so the "late" colour kicks in without
-  // requiring the parent to re-render us.
+export function OrderCard({
+  order,
+  footer,
+}: {
+  order: Order;
+  footer?: ReactNode;
+}) {
   const [now, setNow] = useState(Date.now());
+
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
@@ -20,8 +26,13 @@ export function OrderCard({ order }: { order: Order }) {
       <header className="card-header">
         <span className="card-no">{order.order_no}</span>
         <span className="card-table">{order.table_name}</span>
-        <span className={`card-age ${mins >= 10 ? "late" : ""}`}>{mins}m</span>
+        <span className={`card-age ${mins >= 10 ? "late" : ""}`}>
+          {mins}m
+        </span>
       </header>
+
+      <div className="card-status">{order.status}</div>
+
       <ul className="card-items">
         {order.items.map((it, i) => (
           <li key={i}>
@@ -30,6 +41,8 @@ export function OrderCard({ order }: { order: Order }) {
           </li>
         ))}
       </ul>
+
+      {footer ? <div className="card-footer">{footer}</div> : null}
     </article>
   );
 }

@@ -52,7 +52,9 @@ export const api = {
     ),
 
   listStaff: () =>
-    request<{ id: string; name: string; role: "waiter" | "manager" }[]>("/staff"),
+    request<{ id: string; name: string; role: "waiter" | "manager" }[]>(
+      "/staff",
+    ),
 
   menuSince: (since_version: number) =>
     request<import("../types").MenuItem[]>(
@@ -64,6 +66,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  listOrders: (deviceId?: string, limit = 100) => {
+    const q = new URLSearchParams();
+    if (deviceId) q.set("device_id", deviceId);
+    q.set("limit", String(limit));
+    return request<import("../types").Order[]>(`/orders?${q.toString()}`);
+  },
 
   createCashPayment: (payload: unknown) =>
     request<{
@@ -77,10 +86,4 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-
-  createStripeIntent: (order_id: string) =>
-    request<{ client_secret: string; amount_cents: number }>(
-      "/payments/stripe/intent",
-      { method: "POST", body: JSON.stringify({ order_id }) },
-    ),
 };

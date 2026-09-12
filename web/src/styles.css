@@ -138,3 +138,80 @@ body { margin: 0; background: var(--bg); color: var(--ink); }
 
 .err { color: var(--danger); }
 .ok { color: var(--ok); }
+
+
+
+/* ---------- Kitchen Actions & Status ---------- */
+.card-status {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #94a3b8;
+  margin-bottom: 10px;
+}
+
+.card-footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px dashed #334155;
+}
+
+.kitchen-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.kitchen-toolbar button {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.kitchen-toolbar button.active {
+  background: #334155;
+  color: #f8fafc;
+  border-color: #475569;
+}
+
+.kitchen-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: opacity 0.2s;
+}
+
+.kitchen-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Blue for Start */
+.kitchen-btn-start {
+  background: #0ea5e9; 
+  color: white;
+}
+
+/* Amber/Orange for Ready */
+.kitchen-btn-ready {
+  background: #f59e0b; 
+  color: white;
+}
+
+/* Green for Completed */
+.kitchen-btn-complete {
+  background: #10b981; 
+  color: white;
+}

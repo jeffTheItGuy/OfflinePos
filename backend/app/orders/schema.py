@@ -1,5 +1,7 @@
 """JSON contract for orders — this is exactly what the Expo sync engine sends."""
+
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -39,6 +41,17 @@ class OrderOut(BaseModel):
     order_no: str
     table_name: str
     status: str
+    payment_status: str
     total_cents: int
     created_at: datetime
     items: list[OrderItemOut]
+
+
+class OrderStatusUpdate(BaseModel):
+    status: Literal[
+        "sent",
+        "preparing",
+        "ready",
+        "completed",
+        "void",
+    ]
