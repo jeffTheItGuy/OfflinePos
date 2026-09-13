@@ -7,6 +7,7 @@ import { StaffManagerPage } from "./StaffManagerPage";
 import { SalesReportPage } from "./SalesReportPage";
 import { SettingsPage } from "./SettingsPage";
 import { TablesManagerPage } from "./TablesManagerPage";
+import { ZReportPage } from "./ZReportPage";
 
 const STORAGE_KEY = "harbor.staff";
 
@@ -50,17 +51,20 @@ export function AdminShell({
     | "staff"
     | "sales"
     | "settings"
-    | "tables" = sub.startsWith("orders")
+    | "tables"
+    | "zreport" = sub.startsWith("orders")
     ? "orders"
     : sub.startsWith("staff")
-      ? "staff"
-      : sub.startsWith("sales")
-        ? "sales"
-        : sub.startsWith("settings")
-          ? "settings"
-          : sub.startsWith("tables")
-            ? "tables"
-            : "menu";
+    ? "staff"
+    : sub.startsWith("sales")
+    ? "sales"
+    : sub.startsWith("settings")
+    ? "settings"
+    : sub.startsWith("tables")
+    ? "tables"
+    : sub.startsWith("zreport")
+    ? "zreport"
+    : "menu";
 
   const NavLink = ({
     to,
@@ -102,6 +106,11 @@ export function AdminShell({
           <NavLink to="/admin/staff" label="Staff" active={page === "staff"} />
           <NavLink to="/admin/sales" label="Sales" active={page === "sales"} />
           <NavLink
+            to="/admin/zreport"
+            label="Z-Report"
+            active={page === "zreport"}
+          />
+          <NavLink
             to="/admin/settings"
             label="Settings"
             active={page === "settings"}
@@ -119,6 +128,7 @@ export function AdminShell({
         {page === "orders" && <AdminOrdersPage staff={staff} />}
         {page === "staff" && <StaffManagerPage staff={staff} />}
         {page === "sales" && <SalesReportPage />}
+        {page === "zreport" && <ZReportPage />}
         {page === "settings" && <SettingsPage staff={staff} />}
       </main>
     </div>
