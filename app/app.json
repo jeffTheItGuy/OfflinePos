@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Harbor POS",
-    "slug": "harbor-pos",
+    "name": "MobileToServer-POS",
+    "slug": "MobileToServer-POS",
     "version": "0.2.0",
     "orientation": "default",
     "userInterfaceStyle": "light",
@@ -10,11 +10,11 @@
     ],
     "newArchEnabled": true,
     "android": {
-      "package": "com.nimbusurf.harborpos",
+      "package": "com.nimbusurf.MobileToServer-POS",
       "edgeToEdgeEnabled": true
     },
     "ios": {
-      "bundleIdentifier": "com.nimbusurf.harborpos"
+      "bundleIdentifier": "com.nimbusurf.MobileToServer-POS"
     }
   }
 }

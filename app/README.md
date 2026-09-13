@@ -1,4 +1,4 @@
-# Harbor POS — tablet app
+# MobileToServer-POS — tablet app
 
 Offline-first order-taking app for waiters. Orders are written to a local
 SQLite outbox first, then pushed to the backend with idempotency keys and
