@@ -6,6 +6,7 @@ import type {
   RestaurantSettings,
   Staff,
   TableItem,
+  ZReport,
 } from "./types";
 
 const BASE = "";
@@ -40,19 +41,15 @@ export const api = {
     q.set("limit", String(limit));
     return request<Order[]>(`/orders?${q.toString()}`);
   },
-
   getOrder: (id: string) => request<Order>(`/orders/${id}`),
-
   listKitchenOrders: (limit = 50) => {
     return request<Order[]>(`/orders/kitchen?limit=${limit}`);
   },
-
   updateOrderStatus: (id: string, status: OrderStatus) =>
     request<Order>(`/orders/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),
-
   addOrderItems: (
     staffId: string,
     orderId: string,
@@ -63,7 +60,6 @@ export const api = {
       headers: { "X-Staff-Id": staffId },
       body: JSON.stringify(payload),
     }),
-
   voidOrder: (
     staffId: string,
     orderId: string,
@@ -77,7 +73,6 @@ export const api = {
 
   // ── Menu ──────────────────────────────────────────────────────────
   listMenu: () => request<MenuItem[]>("/menu"),
-
   createMenuItem: (
     staffId: string,
     payload: { name: string; price_cents: number; category: string },
@@ -87,7 +82,6 @@ export const api = {
       headers: { "X-Staff-Id": staffId },
       body: JSON.stringify(payload),
     }),
-
   updateMenuItem: (
     staffId: string,
     id: string,
@@ -100,7 +94,6 @@ export const api = {
       headers: { "X-Staff-Id": staffId },
       body: JSON.stringify(payload),
     }),
-
   deleteMenuItem: async (staffId: string, id: string): Promise<void> => {
     const res = await fetch(`${BASE}/menu/${id}`, {
       method: "DELETE",
@@ -113,7 +106,6 @@ export const api = {
 
   // ── Tables (Step 4) ───────────────────────────────────────────────
   listTables: () => request<TableItem[]>("/tables"),
-
   createTable: (
     staffId: string,
     payload: { name: string; section: string },
@@ -123,7 +115,6 @@ export const api = {
       headers: { "X-Staff-Id": staffId },
       body: JSON.stringify(payload),
     }),
-
   updateTable: (
     staffId: string,
     id: string,
@@ -134,7 +125,6 @@ export const api = {
       headers: { "X-Staff-Id": staffId },
       body: JSON.stringify(payload),
     }),
-
   deleteTable: async (staffId: string, id: string): Promise<void> => {
     const res = await fetch(`${BASE}/tables/${id}`, {
       method: "DELETE",
@@ -151,9 +141,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ pin }),
     }),
-
   listStaff: () => request<Staff[]>("/staff"),
-
   createStaff: (
     staffId: string,
     payload: { name: string; pin: string; role: "waiter" | "manager" },
@@ -166,11 +154,16 @@ export const api = {
 
   // ── Restaurant settings ───────────────────────────────────────────
   getSettings: () => request<RestaurantSettings>("/settings"),
-
   updateSettings: (staffId: string, patch: Partial<RestaurantSettings>) =>
     request<RestaurantSettings>("/settings", {
       method: "PATCH",
       headers: { "X-Staff-Id": staffId },
       body: JSON.stringify(patch),
     }),
+
+  // ── Reports (Step 6) ──────────────────────────────────────────────
+  getZReport: (day?: string) => {
+    const q = day ? `?day=${day}` : "";
+    return request<ZReport>(`/reports/z-report${q}`);
+  },
 };

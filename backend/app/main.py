@@ -18,6 +18,7 @@ from backend.app.payments.router import router as payments_router
 from backend.app.settings.router import router as settings_router
 from backend.app.staff.router import router as staff_router
 from backend.app.tables.router import router as tables_router  # NEW
+from backend.app.reports.router import router as reports_router   # NEW
 
 
 def seed_default_manager() -> None:
@@ -63,4 +64,5 @@ app.include_router(staff_router, prefix="/staff", tags=["staff"])
 app.include_router(devices_router, prefix="/devices", tags=["devices"])
 app.include_router(payments_router, prefix="/payments", tags=["payments"])
 app.include_router(settings_router, prefix="/settings", tags=["settings"])
-app.include_router(tables_router, prefix="/tables", tags=["tables"])  # NEW
+app.include_router(tables_router, prefix="/tables", tags=["tables"])
+app.include_router(reports_router, prefix="/reports", tags=["reports"]) 

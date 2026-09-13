@@ -10,7 +10,7 @@ export default defineConfig({
     host: "0.0.0.0", // Ensures Vite listens to all interfaces inside the container
     port: 5173,
     proxy: Object.fromEntries(
-      ["/orders", "/menu", "/staff", "/devices", "/payments", "/health"].map(
+      ["/orders", "/menu", "/staff", "/devices", "/payments", "/health", "/reports"].map(
         (p) => [p, { target: apiTarget, changeOrigin: true }],
       ),
     ),
