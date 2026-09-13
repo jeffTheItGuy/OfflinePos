@@ -1,5 +1,5 @@
 {
-  "name": "harbor-pos-app",
+  "name": "MobileToServer-POS",
   "version": "0.2.0",
   "main": "index.ts",
   "scripts": {
