@@ -1,6 +1,5 @@
 // The ONE place the server URL lives.
-export const BASE_URL =
-  process.env.EXPO_PUBLIC_BASE_URL;
+export const BASE_URL = process.env.EXPO_PUBLIC_BASE_URL;
 
 async function request<T>(
   path: string,
@@ -61,8 +60,35 @@ export const api = {
       `/menu?since_version=${since_version}`,
     ),
 
+  // ── Step 4: table sync (same version-bump pattern as menu) ─────
+  tablesSince: (since_version: number) =>
+    request<import("../types").TableItem[]>(
+      `/tables?since_version=${since_version}`,
+    ),
+
+  // ── Step 3: tax rates so the tablet can compute offline totals ─
+  getSettings: () =>
+    request<{
+      restaurant_timezone: string;
+      business_day_cutover_hour: number;
+      currency: string;
+      tax_rates: Record<string, number>;
+    }>("/settings"),
+
   createOrder: (payload: unknown) =>
     request<import("../types").Order>("/orders", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  addOrderItems: (orderId: string, payload: unknown) =>
+    request<import("../types").Order>(`/orders/${orderId}/items`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  voidOrder: (orderId: string, payload: unknown) =>
+    request<import("../types").Order>(`/orders/${orderId}/void`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),

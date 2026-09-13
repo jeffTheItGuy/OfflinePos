@@ -15,7 +15,17 @@ export interface MenuItem {
   version: number;
 }
 
+// ── Step 4: configurable tables ──────────────────────────────────
+export interface TableItem {
+  id: string;
+  name: string;
+  section: string; // "DINE-IN", "TAKEOUT & TABS", ...
+  available: boolean;
+  version: number;
+}
+
 export interface CartLine {
+  line_id: string; // local-only row key, never synced
   menu_item_id: string;
   name: string;
   price_cents: number;
@@ -37,12 +47,21 @@ export interface Order {
   table_name: string;
   status: "sent" | "preparing" | "ready" | "completed" | "void";
   payment_status: "unpaid" | "paid" | "refunded";
+  // ── Step 3: tax breakdown (server is authoritative) ──────────
+  subtotal_cents: number;
+  tax_cents: number;
   total_cents: number;
   created_at: string;
   items: OrderItem[];
+  void_reason?: string;
 }
 
-export type OutboxKind = "order" | "payment";
+export type OutboxKind =
+  | "order"
+  | "payment"
+  | "order_add_items"
+  | "order_void";
+
 export type OutboxStatus = "pending" | "syncing" | "done" | "failed";
 
 export interface OutboxItem {
