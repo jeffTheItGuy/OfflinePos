@@ -14,13 +14,11 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-
 import { runMigrations, getMeta, setMeta } from "./src/db/migrations";
 import { startNetworkWatcher } from "./src/sync/network";
 import { runSync } from "./src/sync/engine";
 import { useAuthStore } from "./src/store/authStore";
 import { useSyncStore } from "./src/store/syncStore";
-
 import { SetupScreen } from "./src/screens/SetupScreen";
 import { PinLoginScreen } from "./src/screens/PinLoginScreen";
 import { MenuScreen } from "./src/screens/MenuScreen";
@@ -41,10 +39,13 @@ export default function App() {
 
 function Root() {
   const insets = useSafeAreaInsets();
-
   const [ready, setReady] = useState(false);
   const [tab, setTab] = useState<Tab>("menu");
   const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
+  // Step 2: when set, MenuScreen renders in "add to existing order" mode.
+  const [modifyingOrderId, setModifyingOrderId] = useState<string | null>(
+    null,
+  );
   const [showAdmin, setShowAdmin] = useState(false);
 
   const { staff, setDevice, deviceId } = useAuthStore();
@@ -53,7 +54,6 @@ function Root() {
   useEffect(() => {
     (async () => {
       await runMigrations();
-
       const savedId = await getMeta("device_id");
       if (savedId) {
         setDevice({
@@ -62,29 +62,23 @@ function Root() {
           order_no_prefix: (await getMeta("device_prefix")) ?? "T1",
         });
       }
-
       if (!(await getMeta("device_salt"))) {
         await setMeta(
           "device_salt",
           Math.random().toString(36).slice(2) + Date.now(),
         );
       }
-
       startNetworkWatcher();
-
       const net = await NetInfo.fetch();
       const isOnline = !!net.isConnected && net.isInternetReachable !== false;
       setOnline(isOnline);
-
       if (isOnline) runSync("boot");
-
       setReady(true);
     })();
 
     const unsub = NetInfo.addEventListener((state) => {
       setOnline(!!state.isConnected && state.isInternetReachable !== false);
     });
-
     return unsub;
   }, []);
 
@@ -95,23 +89,24 @@ function Root() {
         setTab("orders");
         return true;
       }
-
+      if (modifyingOrderId) {
+        setModifyingOrderId(null);
+        setTab("orders");
+        return true;
+      }
       if (showAdmin) {
         setShowAdmin(false);
         return true;
       }
-
       if (tab !== "menu") {
         setTab("menu");
         return true;
       }
-
       return false;
     };
-
     const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
     return () => sub.remove();
-  }, [paymentOrderId, showAdmin, tab]);
+  }, [paymentOrderId, modifyingOrderId, showAdmin, tab]);
 
   if (!ready) {
     return (
@@ -141,6 +136,26 @@ function Root() {
     );
   }
 
+  // Step 2: modify mode renders MenuScreen full-screen over the tabs.
+  if (modifyingOrderId) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar style="dark" />
+        <MenuScreen
+          modifyOrderId={modifyingOrderId}
+          onCheckout={(id) => {
+            setModifyingOrderId(null);
+            setPaymentOrderId(id);
+          }}
+          onModifyDone={() => {
+            setModifyingOrderId(null);
+            setTab("orders");
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
   if (paymentOrderId) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -161,7 +176,6 @@ function Root() {
       <SafeAreaView style={styles.safe}>
         <StatusBar style="dark" />
         <MenuAdminScreen />
-
         <TouchableOpacity
           style={[styles.back, { bottom: 16 + insets.bottom }]}
           onPress={() => setShowAdmin(false)}
@@ -175,20 +189,17 @@ function Root() {
   return (
     <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
       <StatusBar style="dark" />
-
-      <SafeAreaView
-        style={{ flex: 1 }}
-        edges={["top", "left", "right"]}
-      >
+      <SafeAreaView style={{ flex: 1 }} edges={["top", "left", "right"]}>
         <View style={{ flex: 1 }}>
           {tab === "menu" && (
             <MenuScreen onCheckout={(id) => setPaymentOrderId(id)} />
           )}
-          {tab === "orders" && <OrdersScreen />}
+          {tab === "orders" && (
+            <OrdersScreen onModify={(id) => setModifyingOrderId(id)} />
+          )}
           {tab === "settings" && <SettingsScreen />}
         </View>
       </SafeAreaView>
-
       <View
         style={[
           styles.tabbar,
@@ -214,7 +225,6 @@ function Root() {
           active={tab === "settings"}
           onPress={() => setTab("settings")}
         />
-
         {staff?.role === "manager" && (
           <TabBtn
             label="Admin"
@@ -249,33 +259,17 @@ function TabBtn({
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "#f8fafc",
-  },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  safe: { flex: 1, backgroundColor: "#f8fafc" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   tabbar: {
     flexDirection: "row",
     backgroundColor: "#f1f5f9",
     borderTopWidth: 1,
     borderColor: "#e2e8f0",
   },
-  tab: {
-    flex: 1,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  tabActive: {
-    backgroundColor: "#0f172a",
-  },
-  tabText: {
-    fontWeight: "700",
-    color: "#334155",
-  },
+  tab: { flex: 1, paddingVertical: 14, alignItems: "center" },
+  tabActive: { backgroundColor: "#0f172a" },
+  tabText: { fontWeight: "700", color: "#334155" },
   back: {
     position: "absolute",
     alignSelf: "center",

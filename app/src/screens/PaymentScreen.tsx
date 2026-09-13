@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
 import { useOrdersStore } from "../store/ordersStore";
 
 export function PaymentScreen({
@@ -31,6 +30,10 @@ export function PaymentScreen({
   }
 
   const currentOrder = order;
+  // Legacy orders (pre-tax) have subtotal/tax of 0 — hide the breakdown
+  // for those and just show the total.
+  const hasBreakdown =
+    currentOrder.subtotal_cents > 0 || currentOrder.tax_cents > 0;
 
   async function cash() {
     setBusy(true);
@@ -55,6 +58,29 @@ export function PaymentScreen({
           ${(currentOrder.total_cents / 100).toFixed(2)}
         </Text>
 
+        {hasBreakdown && (
+          <View style={styles.breakdown}>
+            <View style={styles.breakdownRow}>
+              <Text style={styles.breakdownLabel}>Subtotal</Text>
+              <Text style={styles.breakdownValue}>
+                ${(currentOrder.subtotal_cents / 100).toFixed(2)}
+              </Text>
+            </View>
+            <View style={styles.breakdownRow}>
+              <Text style={styles.breakdownLabel}>Tax</Text>
+              <Text style={styles.breakdownValue}>
+                ${(currentOrder.tax_cents / 100).toFixed(2)}
+              </Text>
+            </View>
+            <View style={[styles.breakdownRow, styles.breakdownTotalRow]}>
+              <Text style={styles.breakdownTotalLabel}>Total</Text>
+              <Text style={styles.breakdownTotalValue}>
+                ${(currentOrder.total_cents / 100).toFixed(2)}
+              </Text>
+            </View>
+          </View>
+        )}
+
         <TouchableOpacity
           style={[styles.btn, styles.cashButton, busy && { opacity: 0.6 }]}
           onPress={cash}
@@ -64,7 +90,6 @@ export function PaymentScreen({
             {busy ? "Processing…" : "Confirm Cash Payment"}
           </Text>
         </TouchableOpacity>
-
         <TouchableOpacity onPress={onDone} style={styles.cancel}>
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
@@ -104,6 +129,29 @@ const styles = StyleSheet.create({
     marginVertical: 24,
     textAlign: "center",
   },
+  breakdown: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    padding: 16,
+    marginBottom: 8,
+  },
+  breakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+  },
+  breakdownLabel: { color: "#64748b", fontSize: 15, fontWeight: "600" },
+  breakdownValue: { fontSize: 15, fontWeight: "700" },
+  breakdownTotalRow: {
+    borderTopWidth: 1,
+    borderColor: "#e2e8f0",
+    marginTop: 6,
+    paddingTop: 12,
+  },
+  breakdownTotalLabel: { fontSize: 17, fontWeight: "800" },
+  breakdownTotalValue: { fontSize: 17, fontWeight: "900" },
   btn: {
     width: "100%",
     padding: 18,

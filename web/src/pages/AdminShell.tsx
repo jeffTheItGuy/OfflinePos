@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { Staff } from "../types";
 import { MenuManagerPage } from "./MenuManagerPage";
+import { AdminOrdersPage } from "./AdminOrdersPage";
 import { StaffManagerPage } from "./StaffManagerPage";
 import { SalesReportPage } from "./SalesReportPage";
+import { SettingsPage } from "./SettingsPage";
+import { TablesManagerPage } from "./TablesManagerPage";
 
 const STORAGE_KEY = "harbor.staff";
 
@@ -41,11 +44,23 @@ export function AdminShell({
   }
 
   const sub = path.replace(/^\/admin\/?/, "");
-  const page: "menu" | "staff" | "sales" = sub.startsWith("staff")
-    ? "staff"
-    : sub.startsWith("sales")
-      ? "sales"
-      : "menu";
+  const page:
+    | "menu"
+    | "orders"
+    | "staff"
+    | "sales"
+    | "settings"
+    | "tables" = sub.startsWith("orders")
+    ? "orders"
+    : sub.startsWith("staff")
+      ? "staff"
+      : sub.startsWith("sales")
+        ? "sales"
+        : sub.startsWith("settings")
+          ? "settings"
+          : sub.startsWith("tables")
+            ? "tables"
+            : "menu";
 
   const NavLink = ({
     to,
@@ -74,8 +89,23 @@ export function AdminShell({
         <h2>Harbor Admin</h2>
         <nav>
           <NavLink to="/admin" label="Menu" active={page === "menu"} />
+          <NavLink
+            to="/admin/tables"
+            label="Tables"
+            active={page === "tables"}
+          />
+          <NavLink
+            to="/admin/orders"
+            label="Orders"
+            active={page === "orders"}
+          />
           <NavLink to="/admin/staff" label="Staff" active={page === "staff"} />
           <NavLink to="/admin/sales" label="Sales" active={page === "sales"} />
+          <NavLink
+            to="/admin/settings"
+            label="Settings"
+            active={page === "settings"}
+          />
         </nav>
         <div className="admin-user">
           <div>{staff.name}</div>
@@ -85,8 +115,11 @@ export function AdminShell({
       </aside>
       <main className="admin-main">
         {page === "menu" && <MenuManagerPage staff={staff} />}
+        {page === "tables" && <TablesManagerPage staff={staff} />}
+        {page === "orders" && <AdminOrdersPage staff={staff} />}
         {page === "staff" && <StaffManagerPage staff={staff} />}
         {page === "sales" && <SalesReportPage />}
+        {page === "settings" && <SettingsPage staff={staff} />}
       </main>
     </div>
   );
