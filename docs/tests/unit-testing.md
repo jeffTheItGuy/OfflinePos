@@ -3,8 +3,6 @@
 
 Unit tests verify individual functions and modules in isolation. They run quickly and require no database, no network, and no device.
 
-The unit layer is deliberately small. MobileToServer-POS risk lives in money arithmetic, business-day bucketing, retry timing, and order state rules — so those are the only things worth unit testing heavily. UI markup, styling, and simple pass-through components are excluded.
-
 ---
 
 ## Scope
@@ -62,18 +60,6 @@ The unit layer is deliberately small. MobileToServer-POS risk lives in money ari
 - No snapshot tests.
 - No tests for presentational-only components, skeleton loaders, or static markup.
 - Money is always asserted in integer cents — never in floats.
-
----
-
-## What Is Not Covered Here
-
-The unit layer intentionally excludes:
-
-- Idempotency and duplicate-write behaviour (see [integration-testing.md](integration-testing.md))
-- Order-number allocation under contention (see [concurrency-testing.md](concurrency-testing.md))
-- Outbox drain and offline recovery (see [offline-testing.md](offline-testing.md))
-- Authorization enforcement at the HTTP boundary (see [security-testing.md](security-testing.md))
-- Report totals against real persisted data (see [integration-testing.md](integration-testing.md))
 
 ---
 

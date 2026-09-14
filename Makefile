@@ -15,7 +15,9 @@ WAIT_FLAG ?= --wait
 .PHONY: help \
 	dev-up dev-down dev-restart dev-restart-web dev-restart-api \
 	prod-up prod-down prod-restart \
-	app app-tunnel
+	app app-tunnel \
+	test test-unit test-unit-backend test-unit-tablet test-unit-web \
+	clean-test-results
 
 
 ############################
@@ -36,7 +38,6 @@ dev-restart-web:
 
 dev-restart-api:
 	$(COMPOSE_DEV) restart api
-
 
 
 ############################
@@ -60,6 +61,38 @@ app-tunnel:
 	node --version && \
 	if [ -f package-lock.json ]; then npm ci; else npm install; fi && \
 	npx expo start --tunnel --clear
+
+
+############################
+# Unit tests
+############################
+
+test-unit-backend:
+	test-unit-backend:
+	python -m pytest backend/tests -q
+
+# Tablet: vitest via nvm (node 22), same setup as `make app`.
+test-unit-tablet:
+	@cd app && \
+	export NVM_DIR="$$HOME/.nvm" && \
+	[ -s "$$NVM_DIR/nvm.sh" ] && . "$$NVM_DIR/nvm.sh" && \
+	(nvm use 22 >/dev/null 2>&1 || nvm install 22) && \
+	npm run test
+
+# Web: vitest via nvm (node 22).
+test-unit-web:
+	@cd web && \
+	export NVM_DIR="$$HOME/.nvm" && \
+	[ -s "$$NVM_DIR/nvm.sh" ] && . "$$NVM_DIR/nvm.sh" && \
+	(nvm use 22 >/dev/null 2>&1 || nvm install 22) && \
+	npm run test
+
+test-unit: test-unit-backend test-unit-tablet test-unit-web
+
+test: test-unit
+
+clean-test-results:
+	rm -rf test-results
 
 
 ############################
