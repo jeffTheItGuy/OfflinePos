@@ -64,28 +64,20 @@ app-tunnel:
 
 
 ############################
-# Unit tests
+# Unit tests 
 ############################
 
 test-unit-backend:
-	test-unit-backend:
-	python -m pytest backend/tests -q
+	@mkdir -p test-results
+	python -m pytest backend/tests -q --junitxml=test-results/backend-unit.xml
 
-# Tablet: vitest via nvm (node 22), same setup as `make app`.
 test-unit-tablet:
-	@cd app && \
-	export NVM_DIR="$$HOME/.nvm" && \
-	[ -s "$$NVM_DIR/nvm.sh" ] && . "$$NVM_DIR/nvm.sh" && \
-	(nvm use 22 >/dev/null 2>&1 || nvm install 22) && \
-	npm run test
+	@mkdir -p test-results
+	@cd app && npm run test -- --reporter=junit --outputFile=../test-results/tablet-unit.xml
 
-# Web: vitest via nvm (node 22).
 test-unit-web:
-	@cd web && \
-	export NVM_DIR="$$HOME/.nvm" && \
-	[ -s "$$NVM_DIR/nvm.sh" ] && . "$$NVM_DIR/nvm.sh" && \
-	(nvm use 22 >/dev/null 2>&1 || nvm install 22) && \
-	npm run test
+	@mkdir -p test-results
+	@cd web && npm run test -- --reporter=junit --outputFile=../test-results/web-unit.xml
 
 test-unit: test-unit-backend test-unit-tablet test-unit-web
 
