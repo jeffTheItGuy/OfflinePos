@@ -11,7 +11,7 @@ import type { Order } from "../types";
  *   format in the restaurant's timezone. This is correct even when the
  *   device viewing the report is in a different timezone.
  */
-function businessDay(
+export function businessDay(
   iso: string,
   timeZone: string,
   cutoverHour: number,
