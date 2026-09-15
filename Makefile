@@ -62,7 +62,7 @@ app-tunnel:
 ############################
 test-unit-backend:
 	@mkdir -p test-results
-	python -m pytest backend/tests -q --junitxml=test-results/backend-unit.xml
+	python -m pytest backend/tests/unit -q --junitxml=test-results/backend-unit.xml
 
 test-unit-tablet:
 	@mkdir -p test-results
@@ -80,22 +80,27 @@ clean-test-results:
 	rm -rf test-results
 
 ############################
-# Integration tests
+# Integration tests (Local pytest against containerized DB)
 ############################
 
-# Full cycle: spin up DB, run tests in container, tear down
-test-integration:
-	$(COMPOSE_INT) up -d --build db
-	$(COMPOSE_INT) up --build --abort-on-container-exit test-runner
-	$(COMPOSE_INT) down -v
-
-# Just start the test DB (for running pytest locally against it)
+# Just start the test DB (useful if you want to run pytest manually)
 test-integration-db-only:
 	$(COMPOSE_INT) up -d db
 
-# Tear down integration environment
+# Tear down integration environment and destroy volumes
 test-integration-down:
 	$(COMPOSE_INT) down -v
+
+# Full cycle: spin up DB, run local pytest, tear down DB
+test-integration: test-integration-db-only
+	@echo "Waiting for Postgres to initialize..."
+	@sleep 2
+	@mkdir -p test-results
+	DATABASE_URL="postgresql+psycopg2://postgres:postgres@localhost:5433/MobileToServer-POS_test" \
+	DEFAULT_MANAGER_NAME="Test Admin" \
+	DEFAULT_MANAGER_PIN="1234" \
+	python -m pytest backend/tests -m integration -v --tb=short --junitxml=test-results/backend-integration.xml
+	@$(MAKE) test-integration-down
 
 ############################
 # Prod

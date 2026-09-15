@@ -6,24 +6,10 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: MobileToServer-POS_test
     ports:
+      # Expose on 5433 so it doesn't conflict with your local/dev Postgres on 5432
       - "5433:5432"
-    tmpfs:
-      - /var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 3s
+      interval: 2s
+      timeout: 2s
       retries: 10
-
-  test-runner:
-    build:
-      context: ./backend
-      dockerfile: ../.docker/test/test-backend.Dockerfile
-    environment:
-      PYTHONPATH: /
-      DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/MobileToServer-POS_test
-      DEFAULT_MANAGER_NAME: Test Admin
-      DEFAULT_MANAGER_PIN: "1234"
-    depends_on:
-      db:
-        condition: service_healthy
