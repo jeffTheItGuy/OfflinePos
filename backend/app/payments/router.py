@@ -2,6 +2,7 @@
 devices offline)."""
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -20,7 +21,11 @@ def create_cash_payment(payload: PaymentCreate, db: Session = Depends(get_db)):
     if cached is not None:
         return JSONResponse(content=cached, status_code=status.HTTP_200_OK)
 
-    order = db.get(Order, payload.order_id)
+    # Lock the order row to prevent race conditions with voids or add-items
+    order = db.execute(
+        select(Order).where(Order.id == payload.order_id).with_for_update()
+    ).scalar_one_or_none()
+    
     if order is None:
         raise HTTPException(404, "Order not found")
 
@@ -62,9 +67,12 @@ def create_cash_payment(payload: PaymentCreate, db: Session = Depends(get_db)):
             raise HTTPException(500, "Payment conflict")
 
         # Keep order/payment state consistent with the replay.
-        order = db.get(Order, payload.order_id)
-        order.payment_status = "paid"
-        db.commit()
+        order = db.execute(
+            select(Order).where(Order.id == payload.order_id).with_for_update()
+        ).scalar_one_or_none()
+        if order:
+            order.payment_status = "paid"
+            db.commit()
 
         body = PaymentOut.model_validate(existing).model_dump(mode="json")
         store_response(db, payload.idempotency_key, body)

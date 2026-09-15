@@ -2,6 +2,4 @@
 testpaths = tests
 markers =
     integration: marks tests as integration (run against real Postgres)
-    concurrency: marks tests as concurrency/race-condition tests
 addopts = -v --tb=short
-asyncio_mode = auto
