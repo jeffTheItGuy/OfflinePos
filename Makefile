@@ -1,15 +1,12 @@
 DOCKER_COMPOSE ?= docker compose
-
 DEV_COMPOSE_FILE ?= dev-docker-compose.yml
-PROD_COMPOSE_FILE ?= prod-docker-compose.yml
+PROD_COMPOSE_FILE ?= docker-compose.yml
+INT_COMPOSE_FILE ?= integration-docker-compose.yml
 APP_COMPOSE_FILE ?= app-docker-compose.yml
-
 COMPOSE_DEV := $(DOCKER_COMPOSE) -f $(DEV_COMPOSE_FILE)
 COMPOSE_PROD := $(DOCKER_COMPOSE) -f $(PROD_COMPOSE_FILE)
+COMPOSE_INT := $(DOCKER_COMPOSE) -f $(INT_COMPOSE_FILE)
 COMPOSE_APP := $(DOCKER_COMPOSE) -f $(APP_COMPOSE_FILE)
-
-# If your Docker Compose version does not support --wait, use:
-# make WAIT_FLAG= dev-deploy-api
 WAIT_FLAG ?= --wait
 
 .PHONY: help \
@@ -17,13 +14,13 @@ WAIT_FLAG ?= --wait
 	prod-up prod-down prod-restart \
 	app app-tunnel \
 	test test-unit test-unit-backend test-unit-tablet test-unit-web \
+	test-integration test-integration-up test-integration-down \
+	test-integration-db-only \
 	clean-test-results
-
 
 ############################
 # Dev
 ############################
-
 dev-up:
 	$(COMPOSE_DEV) up -d --build
 
@@ -39,11 +36,9 @@ dev-restart-web:
 dev-restart-api:
 	$(COMPOSE_DEV) restart api
 
-
 ############################
 # Tablet app (Expo, via nvm)
 ############################
-
 app:
 	@cd app && \
 	export NVM_DIR="$$HOME/.nvm" && \
@@ -62,11 +57,9 @@ app-tunnel:
 	if [ -f package-lock.json ]; then npm ci; else npm install; fi && \
 	npx expo start --tunnel --clear
 
-
 ############################
-# Unit tests 
+# Unit tests
 ############################
-
 test-unit-backend:
 	@mkdir -p test-results
 	python -m pytest backend/tests -q --junitxml=test-results/backend-unit.xml
@@ -86,11 +79,27 @@ test: test-unit
 clean-test-results:
 	rm -rf test-results
 
+############################
+# Integration tests
+############################
+
+# Full cycle: spin up DB, run tests in container, tear down
+test-integration:
+	$(COMPOSE_INT) up -d --build db
+	$(COMPOSE_INT) up --build --abort-on-container-exit test-runner
+	$(COMPOSE_INT) down -v
+
+# Just start the test DB (for running pytest locally against it)
+test-integration-db-only:
+	$(COMPOSE_INT) up -d db
+
+# Tear down integration environment
+test-integration-down:
+	$(COMPOSE_INT) down -v
 
 ############################
 # Prod
 ############################
-
 prod-up:
 	$(COMPOSE_PROD) up -d --build
 

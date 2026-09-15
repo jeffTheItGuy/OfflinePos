@@ -27,7 +27,7 @@ class OrderAddItemsIn(BaseModel):
 
 class OrderVoidIn(BaseModel):
     idempotency_key: str
-    staff_id: str
+    staff_id: str | None = None  # Made optional so header auth takes precedence
     reason: str = Field(min_length=1, max_length=500)
 
 
@@ -49,8 +49,8 @@ class OrderOut(BaseModel):
     table_name: str
     status: str
     payment_status: str
-    subtotal_cents: int       # NEW
-    tax_cents: int            # NEW
+    subtotal_cents: int
+    tax_cents: int
     total_cents: int
     created_at: datetime
     items: list[OrderItemOut]

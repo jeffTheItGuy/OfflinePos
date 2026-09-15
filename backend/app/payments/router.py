@@ -29,6 +29,9 @@ def create_cash_payment(payload: PaymentCreate, db: Session = Depends(get_db)):
     if order.status == "void":
         raise HTTPException(409, "Order is voided — cannot take payment")
 
+    if payload.amount_cents != order.total_cents:
+        raise HTTPException(422, "Payment amount must match order total exactly")
+
     if order.payment_status == "paid":
         raise HTTPException(409, "Order already paid")
 

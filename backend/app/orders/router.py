@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.app.core.deps import require_manager
 from backend.app.database import get_db
 from backend.app.idempotency.service import get_cached_response, store_response
 from backend.app.orders.model import Order, OrderItem
@@ -148,6 +149,7 @@ def void_order(
     order_id: str,
     payload: OrderVoidIn,
     db: Session = Depends(get_db),
+    manager: Staff = Depends(require_manager),  # Enforces 401 if header missing/invalid
 ):
     """Void an order. Requires a manager."""
     cached = get_cached_response(db, payload.idempotency_key)
@@ -162,10 +164,7 @@ def void_order(
             409, "Paid orders cannot be voided — issue a refund instead"
         )
 
-    manager = db.get(Staff, payload.staff_id)
-    if manager is None or not manager.active or manager.role != "manager":
-        raise HTTPException(403, "Manager authorization required to void")
-
+    # Use the authenticated manager from the header, not the body payload
     order.status = "void"
     order.void_reason = payload.reason
     order.voided_by = manager.id
@@ -197,9 +196,12 @@ def list_orders(
     status_filter: str | None = Query(default=None, alias="status"),
     payment_status_filter: str | None = Query(default=None, alias="payment_status"),
     device_id: str | None = Query(default=None),
-    limit: int = Query(default=100, le=500),
+    limit: int = Query(default=100),
     db: Session = Depends(get_db),
 ):
+    # Clamp the limit manually so 9999 becomes 500 without throwing a 422
+    limit = min(limit, 500)
+    
     stmt = select(Order).order_by(Order.created_at.desc()).limit(limit)
 
     statuses = _split_multi(status_filter)
