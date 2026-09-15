@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SettingsOut(BaseModel):
@@ -28,6 +28,14 @@ class SettingsOut(BaseModel):
         description="Named rates, e.g. {'vat': 0.15, 'service': 0.10}.",
     )
 
+    @field_validator("tax_rates")
+    @classmethod
+    def validate_tax_rates_out(cls, v: dict[str, float]) -> dict[str, float]:
+        for name, rate in v.items():
+            if rate < 0:
+                raise ValueError(f"Tax rate '{name}' cannot be negative")
+        return v
+
 
 class SettingsUpdate(BaseModel):
     """Partial update. Only supplied keys are written."""
@@ -36,6 +44,15 @@ class SettingsUpdate(BaseModel):
     business_day_cutover_hour: int | None = Field(default=None, ge=0, le=23)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     tax_rates: dict[str, float] | None = None
+
+    @field_validator("tax_rates")
+    @classmethod
+    def validate_tax_rates_update(cls, v: dict[str, float] | None) -> dict[str, float] | None:
+        if v is not None:
+            for name, rate in v.items():
+                if rate < 0:
+                    raise ValueError(f"Tax rate '{name}' cannot be negative")
+        return v
 
 
 class SettingRow(BaseModel):
