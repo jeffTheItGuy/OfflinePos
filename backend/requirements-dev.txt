@@ -1,0 +1,7 @@
+-r requirements.txt
+
+# Testing dependencies (never installed in production)
+pytest
+pytest-asyncio
+httpx
+anyio

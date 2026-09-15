@@ -114,7 +114,11 @@ def add_order_items(
     if cached is not None:
         return JSONResponse(content=cached, status_code=status.HTTP_200_OK)
 
-    order = db.get(Order, order_id)
+    # Lock the row to prevent race conditions with payments or voids
+    order = db.execute(
+        select(Order).where(Order.id == order_id).with_for_update()
+    ).scalar_one_or_none()
+    
     if order is None:
         raise HTTPException(404, "Order not found")
     if order.status == "void":
@@ -156,7 +160,11 @@ def void_order(
     if cached is not None:
         return JSONResponse(content=cached, status_code=status.HTTP_200_OK)
 
-    order = db.get(Order, order_id)
+    # Lock the row to prevent race conditions with payments or add-items
+    order = db.execute(
+        select(Order).where(Order.id == order_id).with_for_update()
+    ).scalar_one_or_none()
+    
     if order is None:
         raise HTTPException(404, "Order not found")
     if order.payment_status == "paid":

@@ -1,15 +1,16 @@
 # Test Results
 **Last Run:** 2026-09-16
-**Overall Status:** ✅ All Passing (101/101)
+**Overall Status:** ✅ All Passing (108/108)
 
 ## Summary
 | Area | Tests | Passed | Failed | Skipped | Time |
 |---|---|---|---|---|---|
 | Backend Unit | 19 | 19 | 0 | 0 | 2.26s |
 | Backend Integration | 65 | 65 | 0 | 0 | 27.43s |
+| Backend Concurrency | 7 | 7 | 0 | 0 | 10.90s |
 | Tablet Unit | 11 | 11 | 0 | 0 | 1.85s |
 | Web Unit | 6 | 6 | 0 | 0 | 1.49s |
-| **Total** | **101** | **101** | **0** | **0** | **~33.03s** |
+| **Total** | **108** | **108** | **0** | **0** | **~43.93s** |
 
 ---
 
@@ -55,6 +56,21 @@
 - **`test_int_kitchen`** (6 tests) - INT-10
 - **`test_int_zreport`** (7 tests) - INT-11
 
+### Backend Concurrency (Python / Pytest against Postgres)
+*7 tests passed in 10.90s*
+- **`test_con_order_numbers`** (2 tests) - CON-01
+  - ✅ test_20_parallel_orders_get_unique_numbers
+  - ✅ test_no_500_errors
+- **`test_con_payment_void`** (1 test) - CON-02
+  - ✅ test_never_both_paid_and_void
+- **`test_con_idempotency`** (2 tests) - CON-03
+  - ✅ test_burst_collapses_to_one_order
+  - ✅ test_no_500_on_replay
+- **`test_con_multi_tablet`** (1 test) - CON-04
+  - ✅ test_add_items_after_payment_rejected
+- **`test_con_kitchen_polling`** (1 test) - CON-05
+  - ✅ test_no_lost_transitions
+
 ### Tablet (Expo / Vitest)
 *11 tests passed in 1.85s*
 - **`src/lib/tax.test.ts`** (4 tests) — *UNIT-T01*
@@ -89,6 +105,7 @@
 Machine-readable JUnit XML reports are generated in the `test-results/` directory via `make test`:
 - `test-results/backend-unit.xml`
 - `test-results/backend-integration.xml`
+- `test-results/backend-concurrency.xml`
 - `test-results/tablet-unit.xml`
 - `test-results/web-unit.xml`
 
