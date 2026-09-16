@@ -3,7 +3,6 @@ DEV_COMPOSE_FILE ?= dev-docker-compose.yml
 PROD_COMPOSE_FILE ?= docker-compose.yml
 INT_COMPOSE_FILE ?= integration-docker-compose.yml
 APP_COMPOSE_FILE ?= app-docker-compose.yml
-
 COMPOSE_DEV  := $(DOCKER_COMPOSE) -f $(DEV_COMPOSE_FILE)
 COMPOSE_PROD := $(DOCKER_COMPOSE) -f $(PROD_COMPOSE_FILE)
 COMPOSE_INT  := $(DOCKER_COMPOSE) -f $(INT_COMPOSE_FILE)
@@ -13,14 +12,15 @@ COMPOSE_APP  := $(DOCKER_COMPOSE) -f $(APP_COMPOSE_FILE)
 TEST_DB_URL := postgresql+psycopg2://postgres:postgres@localhost:5433/MobileToServer-POS_test
 
 .PHONY: help \
-	dev-up dev-down dev-restart dev-restart-web dev-restart-api \
-	prod-up prod-down prod-restart \
-	app app-tunnel \
-	test test-unit test-unit-backend test-unit-tablet test-unit-web \
-	test-integration test-integration-db-only test-integration-down \
-	test-concurrency test-concurrency-db-only test-concurrency-down \
-	test-load test-load-verify \
-	test-all clean-test-results
+    dev-up dev-down dev-restart dev-restart-web dev-restart-api \
+    prod-up prod-down prod-restart \
+    app app-tunnel \
+    test test-unit test-unit-backend test-unit-tablet test-unit-web \
+    test-integration test-integration-db-only test-integration-down \
+    test-concurrency test-concurrency-db-only test-concurrency-down \
+    test-security test-security-db-only test-security-down \
+    test-load test-load-verify \
+    test-all clean-test-results
 
 ############################
 # Help
@@ -50,12 +50,17 @@ help:
 	@echo "    test-concurrency-db-only"
 	@echo "    test-concurrency-down"
 	@echo ""
+	@echo "  SECURITY TESTS"
+	@echo "    test-security        authorization & exposure tests (SEC-01..11)"
+	@echo "    test-security-db-only"
+	@echo "    test-security-down"
+	@echo ""
 	@echo "  LOAD TESTS"
 	@echo "    test-load            k6 sustained load"
 	@echo "    test-load-verify     post-load integrity checks"
 	@echo ""
 	@echo "  EVERYTHING"
-	@echo "    test-all             unit + integration + concurrency"
+	@echo "    test-all             unit + integration + concurrency + security"
 	@echo "    clean-test-results"
 
 ############################
@@ -153,6 +158,26 @@ test-concurrency: test-concurrency-db-only
 	@$(MAKE) test-concurrency-down
 
 ############################
+# Security tests
+############################
+test-security-db-only:
+	$(COMPOSE_INT) up -d db
+	@echo "Waiting for Postgres…"
+	@sleep 3
+
+test-security-down:
+	$(COMPOSE_INT) down -v
+
+test-security: test-security-db-only
+	@mkdir -p test-results
+	DATABASE_URL="$(TEST_DB_URL)" \
+	DEFAULT_MANAGER_NAME="Security Admin" \
+	DEFAULT_MANAGER_PIN="1234" \
+	python -m pytest backend/tests/security -m security -v --tb=short \
+		--junitxml=test-results/backend-security.xml
+	@$(MAKE) test-security-down
+
+############################
 # Load tests
 ############################
 test-load:
@@ -170,7 +195,7 @@ test-load-verify:
 ############################
 # Run everything
 ############################
-test-all: test-unit test-integration test-concurrency
+test-all: test-unit test-integration test-concurrency test-security
 	@echo ""
 	@echo "═══ All test suites passed ═══"
 
