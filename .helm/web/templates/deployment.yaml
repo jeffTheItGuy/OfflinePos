@@ -28,7 +28,7 @@ spec:
             capabilities:
               drop: ["ALL"]
           ports:
-            - containerPort: {{ .Values.service.port }}
+            - containerPort: {{ .Values.service.targetPort | default .Values.service.port }}
               name: http
           env:
             {{- range $key, $value := .Values.env }}
@@ -48,7 +48,7 @@ spec:
           readinessProbe:
             httpGet:
               path: {{ .Values.probes.readiness.path }}
-              port: {{ .Values.service.port }}
+              port: {{ .Values.service.targetPort | default .Values.service.port }}
               scheme: HTTP
             initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
             periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
@@ -57,7 +57,7 @@ spec:
           livenessProbe:
             httpGet:
               path: {{ .Values.probes.liveness.path }}
-              port: {{ .Values.service.port }}
+              port: {{ .Values.service.targetPort | default .Values.service.port }}
               scheme: HTTP
             initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
             periodSeconds: {{ .Values.probes.liveness.periodSeconds }}

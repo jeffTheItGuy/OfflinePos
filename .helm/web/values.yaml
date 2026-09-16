@@ -6,9 +6,12 @@ image:
   tag: ""
   pullPolicy: Never
 
+
 service:
   port: 80
+  targetPort: 8080  # Added for non-root nginx
   type: ClusterIP
+
 
 ingress:
   className: traefik
