@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # Mondays at 06:00 UTC — catches newly published CVEs.
     - cron: '0 6 * * 1'
   workflow_dispatch:
 
@@ -46,7 +45,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
 
-  # ── 2. Ecosystem-native audits (recommended in security-testing.md) ──
+  # ── 2. Ecosystem-native audits ──────────────────────────────────────
   ecosystem-audit:
     name: pip-audit + npm audit
     runs-on: ubuntu-latest
@@ -71,13 +70,15 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Audit web JS deps
+      - name: Audit web JS deps (prod only)
         working-directory: web
-        run: npm audit --audit-level=high
+        # --omit=dev ignores Vite/esbuild dev-server vulnerabilities which 
+        # only affect local development, not the production Nginx build.
+        run: npm audit --audit-level=high --omit=dev
 
-      - name: Audit tablet JS deps
+      - name: Audit tablet JS deps (prod only)
         working-directory: app
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=high --omit=dev
 
   # ── 3. IaC / Dockerfile misconfiguration scan ───────────────────────
   iac-scan:
@@ -94,7 +95,8 @@ jobs:
           scan-ref: '.'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
-          skip-dirs: 'node_modules,.git,test-results'
+          # Skip dev dockerfiles (intentionally root for bind mounts) and noise
+          skip-dirs: 'node_modules,.git,test-results,.docker/dev'
 
   # ── 4. Secret scanning ──────────────────────────────────────────────
   secret-scan:
@@ -107,7 +109,8 @@ jobs:
       - name: Scan for hardcoded secrets
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'secret'
+          scan-type: 'fs'          # 'secret' is no longer a top-level command
+          scanners: 'secret'       # Tell Trivy to ONLY look for secrets
           scan-ref: '.'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
