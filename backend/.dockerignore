@@ -1,3 +1,4 @@
+
 .git
 .github
 .env
@@ -15,4 +16,6 @@ REFACTOR_NOTES.md
 docker-compose.yml
 Caddyfile
 web/
-app/                          
+/app/                          
+
+
