@@ -75,17 +75,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          for i in 1 2 3; do
+          for i in 1 2 3 4 5; do
             if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" "echo SSH OK"; then
               echo "✅ SSH connectivity confirmed."
               exit 0
             fi
 
-            echo "SSH connectivity attempt $i failed."
+            echo "⚠️ SSH connectivity attempt $i failed. Retrying in 10s..."
             sleep 10
           done
 
-          echo "❌ Could not SSH to $REMOTE_SERVER." >&2
+          echo "❌ Could not SSH to $REMOTE_SERVER after 5 attempts." >&2
           exit 1
 
       - name: Validate Alembic files
@@ -112,16 +112,56 @@ jobs:
         run: |
           set -euo pipefail
 
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" \
-            "rm -rf '$REMOTE_WORKSPACE' && mkdir -p '$REMOTE_WORKSPACE'"
+          echo "Preparing remote workspace..."
+          for i in 1 2 3 4 5; do
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" \
+              "rm -rf '$REMOTE_WORKSPACE' && mkdir -p '$REMOTE_WORKSPACE'"; then
+              break
+            fi
 
+            if [ "$i" -eq 5 ]; then
+              echo "❌ Failed to prepare remote workspace." >&2
+              exit 1
+            fi
+
+            echo "⚠️ Workspace preparation failed. Retrying in 10s... ($i/5)"
+            sleep 10
+          done
+
+          echo "Archiving backend..."
           tar --exclude='*.pyc' --exclude='__pycache__' --exclude='.pytest_cache' -czf backend.tar.gz backend
 
-          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 backend.tar.gz \
-            "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/backend.tar.gz"
+          echo "Copying archive to remote..."
+          for i in 1 2 3 4 5; do
+            if scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 backend.tar.gz \
+              "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/backend.tar.gz"; then
+              break
+            fi
 
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" \
-            "cd '$REMOTE_WORKSPACE' && tar -xzf backend.tar.gz && rm -f backend.tar.gz"
+            if [ "$i" -eq 5 ]; then
+              echo "❌ Failed to copy backend archive." >&2
+              exit 1
+            fi
+
+            echo "⚠️ SCP failed. Retrying in 10s... ($i/5)"
+            sleep 10
+          done
+
+          echo "Extracting archive on remote..."
+          for i in 1 2 3 4 5; do
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" \
+              "cd '$REMOTE_WORKSPACE' && tar -xzf backend.tar.gz && rm -f backend.tar.gz"; then
+              break
+            fi
+
+            if [ "$i" -eq 5 ]; then
+              echo "❌ Failed to extract backend archive." >&2
+              exit 1
+            fi
+
+            echo "⚠️ Extraction failed. Retrying in 10s... ($i/5)"
+            sleep 10
+          done
 
           rm -f backend.tar.gz
 
@@ -145,8 +185,6 @@ jobs:
           export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
           cd "$REMOTE_WORKSPACE"
-          
-          # FIX: Resolve to an absolute path so Docker bind mounts work correctly
           WORKSPACE_ABS="$(pwd)"
 
           if ! command -v docker >/dev/null 2>&1; then
@@ -167,7 +205,6 @@ jobs:
           echo "Pulling migration runtime image: $PYTHON_IMAGE"
           if ! docker pull "$PYTHON_IMAGE"; then
             echo "❌ Failed to pull $PYTHON_IMAGE." >&2
-            echo "If this server is offline or firewalled, pre-import a Python image or use a self-hosted runner." >&2
             exit 1
           fi
 

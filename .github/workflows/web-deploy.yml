@@ -16,6 +16,8 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,16 +28,60 @@ jobs:
           REMOTE_SERVER: ${{ secrets.REMOTE_SERVER }}
         run: |
           set -euo pipefail
+
           if [ -z "${REMOTE_SSH:-}" ]; then
             echo "REMOTE_SSH secret is missing." >&2
             exit 1
           fi
+
+          if [ -z "${REMOTE_SERVER:-}" ]; then
+            echo "REMOTE_SERVER secret is missing." >&2
+            exit 1
+          fi
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
+
           printf '%s\n' "$REMOTE_SSH" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "$REMOTE_SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          for i in 1 2 3; do
+            if ssh-keyscan -H "$REMOTE_SERVER" >> ~/.ssh/known_hosts 2>/dev/null; then
+              echo "Host key captured."
+              break
+            fi
+
+            echo "ssh-keyscan attempt $i failed."
+
+            if [ "$i" -eq 3 ]; then
+              echo "❌ Could not reach $REMOTE_SERVER:22 for ssh-keyscan." >&2
+              exit 1
+            fi
+
+            sleep 10
+          done
+
           chmod 644 ~/.ssh/known_hosts
+
+      - name: Test SSH connectivity
+        env:
+          REMOTE_SERVER: ${{ secrets.REMOTE_SERVER }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+        run: |
+          set -euo pipefail
+
+          for i in 1 2 3 4 5; do
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" "echo SSH OK"; then
+              echo "✅ SSH connectivity confirmed."
+              exit 0
+            fi
+
+            echo "⚠️ SSH connectivity attempt $i failed. Retrying in 10s..."
+            sleep 10
+          done
+
+          echo "❌ Could not SSH to $REMOTE_SERVER after 5 attempts." >&2
+          exit 1
 
       - name: Copy Files to Remote
         env:
@@ -44,14 +90,91 @@ jobs:
           REMOTE_WORKSPACE: ${{ secrets.REMOTE_DEPLOY_DIR }}/web-${{ github.run_id }}
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
-            "rm -rf '$REMOTE_WORKSPACE' && mkdir -p '$REMOTE_WORKSPACE/.helm' '$REMOTE_WORKSPACE/web' '$REMOTE_WORKSPACE/.docker/prod'"
-          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -r .helm/web \
-            "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/.helm/"
-          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -r web/* \
-            "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/web/"
-          scp -o BatchMode=yes -o StrictHostKeyChecking=yes .docker/prod/prod-web.Dockerfile \
-            "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/.docker/prod/"
+
+          echo "Preparing remote workspace..."
+          for i in 1 2 3 4 5; do
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" \
+              "rm -rf '$REMOTE_WORKSPACE' && mkdir -p '$REMOTE_WORKSPACE/.helm' '$REMOTE_WORKSPACE/.docker/prod'"; then
+              break
+            fi
+
+            if [ "$i" -eq 5 ]; then
+              echo "❌ Failed to prepare remote workspace." >&2
+              exit 1
+            fi
+
+            echo "⚠️ Workspace preparation failed. Retrying in 10s... ($i/5)"
+            sleep 10
+          done
+
+          echo "Copying Helm chart..."
+          for i in 1 2 3 4 5; do
+            if scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -r .helm/web \
+              "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/.helm/"; then
+              break
+            fi
+
+            if [ "$i" -eq 5 ]; then
+              echo "❌ Failed to copy Helm chart." >&2
+              exit 1
+            fi
+
+            echo "⚠️ Helm chart copy failed. Retrying in 10s... ($i/5)"
+            sleep 10
+          done
+
+          echo "Archiving web..."
+          tar --exclude='node_modules' --exclude='dist' --exclude='.pytest_cache' -czf web.tar.gz web
+
+          echo "Copying web archive to remote..."
+          for i in 1 2 3 4 5; do
+            if scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 web.tar.gz \
+              "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/web.tar.gz"; then
+              break
+            fi
+
+            if [ "$i" -eq 5 ]; then
+              echo "❌ Failed to copy web archive." >&2
+              exit 1
+            fi
+
+            echo "⚠️ Web archive copy failed. Retrying in 10s... ($i/5)"
+            sleep 10
+          done
+
+          echo "Extracting web into workspace root..."
+          for i in 1 2 3 4 5; do
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" \
+              "cd '$REMOTE_WORKSPACE' && tar -xzf web.tar.gz --strip-components=1 && rm -f web.tar.gz"; then
+              break
+            fi
+
+            if [ "$i" -eq 5 ]; then
+              echo "❌ Failed to extract web archive." >&2
+              exit 1
+            fi
+
+            echo "⚠️ Web extraction failed. Retrying in 10s... ($i/5)"
+            sleep 10
+          done
+
+          echo "Copying Dockerfile..."
+          for i in 1 2 3 4 5; do
+            if scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 .docker/prod/prod-web.Dockerfile \
+              "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/.docker/prod/"; then
+              break
+            fi
+
+            if [ "$i" -eq 5 ]; then
+              echo "❌ Failed to copy Dockerfile." >&2
+              exit 1
+            fi
+
+            echo "⚠️ Dockerfile copy failed. Retrying in 10s... ($i/5)"
+            sleep 10
+          done
+
+          rm -f web.tar.gz
 
       - name: Build and Deploy on Remote Server
         env:
@@ -62,7 +185,8 @@ jobs:
           RESTART_REASON: github-actions-deploy
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
+
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" \
             RESTART_REASON="$RESTART_REASON" \
             BUILD_ID="$BUILD_ID" \
             REMOTE_WORKSPACE="$REMOTE_WORKSPACE" \
@@ -74,14 +198,17 @@ jobs:
             bash << 'ENDSSH'
           set -euo pipefail
           export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
           cd "$REMOTE_WORKSPACE"
 
           docker system prune -f
           docker builder prune -f
+
           docker build --no-cache -f .docker/prod/prod-web.Dockerfile -t "offlinepos-web:$BUILD_ID" .
           docker save "offlinepos-web:$BUILD_ID" | k3s ctr images import -
 
           TIMESTAMP=$(date +%s)
+
           helm upgrade --install "$RELEASE_NAME" .helm/web \
             --namespace "$NAMESPACE" \
             --set namespace="$NAMESPACE" \
@@ -95,7 +222,7 @@ jobs:
 
           kubectl wait --for=condition=available --timeout=300s "deployment/$DEPLOYMENT_NAME" -n "$NAMESPACE" || (
             kubectl logs -n "$NAMESPACE" -l "app=$DEPLOYMENT_NAME" --tail=50 || true
-            helm rollback "$RELEASE_NAME" -n "$NAMESPACE"
+            helm rollback "$RELEASE_NAME" -n "$NAMESPACE" || true
             exit 1
           )
           ENDSSH
@@ -108,5 +235,11 @@ jobs:
           REMOTE_WORKSPACE: ${{ secrets.REMOTE_DEPLOY_DIR }}/web-${{ github.run_id }}
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
-            "rm -rf '$REMOTE_WORKSPACE'"
+
+          if [ -z "${REMOTE_SERVER:-}" ] || [ -z "${REMOTE_USER:-}" ] || [ ! -f "$HOME/.ssh/id_rsa" ]; then
+            echo "Skipping cleanup because SSH is not fully configured." >&2
+            exit 0
+          fi
+
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" \
+            "rm -rf '$REMOTE_WORKSPACE'" || true
