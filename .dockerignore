@@ -1,4 +1,3 @@
-
 .git
 .github
 .env
@@ -12,10 +11,7 @@ venv/
 .venv/
 tests/
 *.md
-REFACTOR_NOTES.md
 docker-compose.yml
 Caddyfile
 web/
-/app/                          
-
-
+/app/
