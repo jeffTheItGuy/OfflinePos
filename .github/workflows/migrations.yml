@@ -4,14 +4,25 @@ on:
   workflow_dispatch:
   workflow_call:
 
-permissions: {}
+permissions:
+  contents: read
+
+concurrency:
+  group: database-migrations
+  cancel-in-progress: false
 
 env:
   NAMESPACE: offlinepos
+  POSTGRES_DEPLOYMENT: offlinepos-postgresql
+  POSTGRES_SERVICE: offlinepos-postgresql-svc
+  POSTGRES_DB: offlinepos
+  PYTHON_IMAGE: python:3.12-slim
 
 jobs:
   migrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,111 +33,184 @@ jobs:
           REMOTE_SERVER: ${{ secrets.REMOTE_SERVER }}
         run: |
           set -euo pipefail
-          if [ -z "${REMOTE_SSH:-}" ]; then echo "REMOTE_SSH secret is missing." >&2; exit 1; fi
-          if [ -z "${REMOTE_SERVER:-}" ]; then echo "REMOTE_SERVER secret is missing." >&2; exit 1; fi
+
+          if [ -z "${REMOTE_SSH:-}" ]; then
+            echo "REMOTE_SSH secret is missing." >&2
+            exit 1
+          fi
+
+          if [ -z "${REMOTE_SERVER:-}" ]; then
+            echo "REMOTE_SERVER secret is missing." >&2
+            exit 1
+          fi
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
+
           printf '%s\n' "$REMOTE_SSH" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+
           ssh-keyscan -H "$REMOTE_SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
           chmod 644 ~/.ssh/known_hosts
 
-      - name: Copy Migrations to Remote
+      - name: Validate Alembic files
+        run: |
+          set -euo pipefail
+
+          if [ ! -f backend/alembic.ini ]; then
+            echo "❌ backend/alembic.ini not found." >&2
+            echo "This workflow expects the backend Alembic migration setup." >&2
+            exit 1
+          fi
+
+          if [ ! -d backend/alembic/versions ]; then
+            echo "❌ backend/alembic/versions not found." >&2
+            exit 1
+          fi
+
+          echo "✅ Alembic migration files found."
+
+      - name: Copy backend to Remote
         env:
           REMOTE_SERVER: ${{ secrets.REMOTE_SERVER }}
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           REMOTE_WORKSPACE: ${{ secrets.REMOTE_DEPLOY_DIR }}/migrations-${{ github.run_id }}
         run: |
           set -euo pipefail
+
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
-            "rm -rf '$REMOTE_WORKSPACE' && mkdir -p '$REMOTE_WORKSPACE/backend/database'"
-          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -r backend/database/migrations \
-            "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/backend/database/"
+            "rm -rf '$REMOTE_WORKSPACE' && mkdir -p '$REMOTE_WORKSPACE'"
 
-      - name: Run Migrations on Remote Server
+          tar -czf backend.tar.gz backend
+
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes backend.tar.gz \
+            "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/backend.tar.gz"
+
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
+            "cd '$REMOTE_WORKSPACE' && tar -xzf backend.tar.gz && rm -f backend.tar.gz"
+
+          rm -f backend.tar.gz
+
+      - name: Run Alembic migrations on Remote Server
         env:
           REMOTE_SERVER: ${{ secrets.REMOTE_SERVER }}
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           REMOTE_WORKSPACE: ${{ secrets.REMOTE_DEPLOY_DIR }}/migrations-${{ github.run_id }}
+          BUILD_ID: ${{ github.run_id }}-${{ github.run_number }}
         run: |
           set -euo pipefail
 
-          cat > /tmp/run-migrations.sh << 'SCRIPT'
+          cat > /tmp/run-alembic-migrations.sh << 'SCRIPT'
           #!/bin/bash
           set -euo pipefail
+
           export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
-          MIGRATIONS_DIR="$REMOTE_WORKSPACE/backend/database/migrations"
+          cd "$REMOTE_WORKSPACE"
 
-          echo "=== Migration files present at $MIGRATIONS_DIR ==="
-          ls -la "$MIGRATIONS_DIR" 2>/dev/null || echo "!! DIRECTORY MISSING: $MIGRATIONS_DIR"
-          echo "=== .sql files found ==="
-          find "$MIGRATIONS_DIR" -name '*.sql' 2>/dev/null || echo "!! NO .sql FILES FOUND"
-          echo "=================================================="
-
-          mkdir -p "$HOME/bin"
-          export PATH="$HOME/bin:$PATH"
-          if ! command -v migrate >/dev/null 2>&1; then
-            echo "Installing migrate CLI..."
-            curl -fsSL https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-amd64.tar.gz -o /tmp/migrate.tar.gz
-            tar -xzf /tmp/migrate.tar.gz -C /tmp
-            mv /tmp/migrate "$HOME/bin/migrate"
-            chmod +x "$HOME/bin/migrate"
+          if [ ! -f backend/alembic.ini ]; then
+            echo "❌ backend/alembic.ini not found on remote server." >&2
+            exit 1
           fi
+
+          if [ ! -d backend/alembic/versions ]; then
+            echo "❌ backend/alembic/versions not found on remote server." >&2
+            exit 1
+          fi
+
+          echo "Pulling Python image for migrations..."
+          docker pull "$PYTHON_IMAGE"
 
           urlencode() {
             local s="$1" out="" c i
+
             for ((i=0; i<${#s}; i++)); do
               c="${s:$i:1}"
+
               case "$c" in
                 [a-zA-Z0-9.~_-]) out+="$c" ;;
                 *) out+="$(printf '%%%02X' "'$c")" ;;
               esac
             done
+
             printf '%s' "$out"
           }
 
           DB_USER=$(kubectl get secret offlinepos-secrets -n "$NAMESPACE" -o jsonpath='{.data.DATABASE_USER}' | base64 -d)
           DB_PASS=$(kubectl get secret offlinepos-secrets -n "$NAMESPACE" -o jsonpath='{.data.DATABASE_PASSWORD}' | base64 -d)
+
           DB_USER_ENC="$(urlencode "$DB_USER")"
           DB_PASS_ENC="$(urlencode "$DB_PASS")"
 
-          kubectl wait --for=condition=available --timeout=300s deployment/offlinepos-postgresql -n "$NAMESPACE"
+          echo "Waiting for PostgreSQL deployment..."
+          kubectl wait --for=condition=available --timeout=300s "deployment/$POSTGRES_DEPLOYMENT" -n "$NAMESPACE"
 
           PF_PORT=$((15000 + RANDOM % 10000))
-          DSN="postgres://${DB_USER_ENC}:${DB_PASS_ENC}@localhost:${PF_PORT}/offlinepos?sslmode=disable"
-          kubectl port-forward svc/offlinepos-postgresql-svc "${PF_PORT}:5432" -n "$NAMESPACE" >/dev/null 2>&1 &
+          PF_LOG="/tmp/kubectl-port-forward-$$.log"
+
+          DSN="postgresql+psycopg://${DB_USER_ENC}:${DB_PASS_ENC}@127.0.0.1:${PF_PORT}/${POSTGRES_DB}"
+
+          cleanup() {
+            if [ -n "${PF_PID:-}" ]; then
+              kill "$PF_PID" 2>/dev/null || true
+              sleep 2
+              kill -9 "$PF_PID" 2>/dev/null || true
+              wait "$PF_PID" 2>/dev/null || true
+            fi
+
+            rm -f "$PF_LOG" 2>/dev/null || true
+          }
+
+          trap cleanup EXIT
+
+          echo "Starting port-forward to $POSTGRES_SERVICE on localhost:${PF_PORT}"
+          kubectl port-forward "svc/$POSTGRES_SERVICE" "${PF_PORT}:5432" -n "$NAMESPACE" </dev/null >"$PF_LOG" 2>&1 &
           PF_PID=$!
-          sleep 3
 
-          set +e
-          migrate -path "$MIGRATIONS_DIR" -database "$DSN" up > /tmp/migrate-output.txt 2>&1
-          MIGRATE_EXIT=$?
-          set -e
-          cat /tmp/migrate-output.txt
+          echo "Waiting for port-forward to become ready..."
+          for i in $(seq 1 60); do
+            if bash -c "exec 3<>/dev/tcp/127.0.0.1/${PF_PORT}" 2>/dev/null; then
+              echo "✅ Port-forward is ready."
+              break
+            fi
 
-          kill "$PF_PID" 2>/dev/null || true
+            if [ "$i" -eq 60 ]; then
+              echo "❌ Port-forward did not become ready within 60 seconds." >&2
+              echo "Port-forward logs:" >&2
+              cat "$PF_LOG" >&2 || true
+              exit 1
+            fi
 
-          if [ "$MIGRATE_EXIT" -ne 0 ]; then
-            echo "❌ Migrations failed with exit code $MIGRATE_EXIT"
-            exit "$MIGRATE_EXIT"
-          fi
+            sleep 1
+          done
 
-          if grep -qi "no change" /tmp/migrate-output.txt; then
-            echo ""
-            echo "⚠️  migrate reported 'no change' — NOTHING was applied."
-            echo "    golang-migrate only recognizes files named: {version}_{title}.up.sql"
-          else
-            echo "✅ Migrations applied."
-          fi
+          echo "Running Alembic migrations..."
+          docker run --rm --network host \
+            -e DATABASE_URL="$DSN" \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            -v "$REMOTE_WORKSPACE/backend:/app/backend:ro" \
+            -w /app/backend \
+            "$PYTHON_IMAGE" \
+            bash -c 'pip install --no-cache-dir -r requirements.txt && echo "Current Alembic revision before upgrade:" && (alembic current || true) && alembic upgrade head && echo "Current Alembic revision after upgrade:" && alembic current'
+
+          echo "✅ Alembic migrations applied successfully."
           SCRIPT
 
-          scp -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/run-migrations.sh "$REMOTE_USER@$REMOTE_SERVER:/tmp/run-migrations.sh"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/run-alembic-migrations.sh \
+            "$REMOTE_USER@$REMOTE_SERVER:/tmp/run-alembic-migrations.sh"
+
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
             REMOTE_WORKSPACE="$REMOTE_WORKSPACE" \
             NAMESPACE="$NAMESPACE" \
-            bash /tmp/run-migrations.sh
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" "rm -f /tmp/run-migrations.sh"
+            POSTGRES_DEPLOYMENT="$POSTGRES_DEPLOYMENT" \
+            POSTGRES_SERVICE="$POSTGRES_SERVICE" \
+            POSTGRES_DB="$POSTGRES_DB" \
+            PYTHON_IMAGE="$PYTHON_IMAGE" \
+            BUILD_ID="$BUILD_ID" \
+            bash /tmp/run-alembic-migrations.sh
+
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
+            "rm -f /tmp/run-alembic-migrations.sh"
 
       - name: Cleanup Remote Workspace
         if: always()
@@ -136,5 +220,11 @@ jobs:
           REMOTE_WORKSPACE: ${{ secrets.REMOTE_DEPLOY_DIR }}/migrations-${{ github.run_id }}
         run: |
           set -euo pipefail
+
+          if [ -z "${REMOTE_SERVER:-}" ] || [ -z "${REMOTE_USER:-}" ] || [ ! -f "$HOME/.ssh/id_rsa" ]; then
+            echo "Skipping cleanup because SSH is not fully configured." >&2
+            exit 0
+          fi
+
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
-            "rm -rf '$REMOTE_WORKSPACE'"
+            "rm -rf '$REMOTE_WORKSPACE'" || true
