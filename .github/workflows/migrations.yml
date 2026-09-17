@@ -50,8 +50,43 @@ jobs:
           printf '%s\n' "$REMOTE_SSH" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          ssh-keyscan -H "$REMOTE_SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
+          for i in 1 2 3; do
+            if ssh-keyscan -H "$REMOTE_SERVER" >> ~/.ssh/known_hosts 2>/dev/null; then
+              echo "Host key captured."
+              break
+            fi
+
+            echo "ssh-keyscan attempt $i failed."
+
+            if [ "$i" -eq 3 ]; then
+              echo "❌ Could not reach $REMOTE_SERVER:22 for ssh-keyscan." >&2
+              exit 1
+            fi
+
+            sleep 10
+          done
+
           chmod 644 ~/.ssh/known_hosts
+
+      - name: Test SSH connectivity
+        env:
+          REMOTE_SERVER: ${{ secrets.REMOTE_SERVER }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+        run: |
+          set -euo pipefail
+
+          for i in 1 2 3; do
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" "echo SSH OK"; then
+              echo "✅ SSH connectivity confirmed."
+              exit 0
+            fi
+
+            echo "SSH connectivity attempt $i failed."
+            sleep 10
+          done
+
+          echo "❌ Could not SSH to $REMOTE_SERVER." >&2
+          exit 1
 
       - name: Validate Alembic files
         run: |
@@ -59,7 +94,6 @@ jobs:
 
           if [ ! -f backend/alembic.ini ]; then
             echo "❌ backend/alembic.ini not found." >&2
-            echo "This workflow expects the backend Alembic migration setup." >&2
             exit 1
           fi
 
@@ -78,15 +112,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" \
             "rm -rf '$REMOTE_WORKSPACE' && mkdir -p '$REMOTE_WORKSPACE'"
 
-          tar -czf backend.tar.gz backend
+          tar --exclude='*.pyc' --exclude='__pycache__' --exclude='.pytest_cache' -czf backend.tar.gz backend
 
-          scp -o BatchMode=yes -o StrictHostKeyChecking=yes backend.tar.gz \
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 backend.tar.gz \
             "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/backend.tar.gz"
 
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" \
             "cd '$REMOTE_WORKSPACE' && tar -xzf backend.tar.gz && rm -f backend.tar.gz"
 
           rm -f backend.tar.gz
@@ -96,17 +130,26 @@ jobs:
           REMOTE_SERVER: ${{ secrets.REMOTE_SERVER }}
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           REMOTE_WORKSPACE: ${{ secrets.REMOTE_DEPLOY_DIR }}/migrations-${{ github.run_id }}
-          BUILD_ID: ${{ github.run_id }}-${{ github.run_number }}
         run: |
           set -euo pipefail
 
-          cat > /tmp/run-alembic-migrations.sh << 'SCRIPT'
-          #!/bin/bash
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" \
+            REMOTE_WORKSPACE="$REMOTE_WORKSPACE" \
+            NAMESPACE="$NAMESPACE" \
+            POSTGRES_DEPLOYMENT="$POSTGRES_DEPLOYMENT" \
+            POSTGRES_SERVICE="$POSTGRES_SERVICE" \
+            POSTGRES_DB="$POSTGRES_DB" \
+            PYTHON_IMAGE="$PYTHON_IMAGE" \
+            bash << 'ENDSSH'
           set -euo pipefail
-
           export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
           cd "$REMOTE_WORKSPACE"
+
+          if ! command -v docker >/dev/null 2>&1; then
+            echo "❌ docker is not available on the remote server." >&2
+            exit 1
+          fi
 
           if [ ! -f backend/alembic.ini ]; then
             echo "❌ backend/alembic.ini not found on remote server." >&2
@@ -118,8 +161,12 @@ jobs:
             exit 1
           fi
 
-          echo "Pulling Python image for migrations..."
-          docker pull "$PYTHON_IMAGE"
+          echo "Pulling migration runtime image: $PYTHON_IMAGE"
+          if ! docker pull "$PYTHON_IMAGE"; then
+            echo "❌ Failed to pull $PYTHON_IMAGE." >&2
+            echo "If this server is offline or firewalled, pre-import a Python image or use a self-hosted runner." >&2
+            exit 1
+          fi
 
           urlencode() {
             local s="$1" out="" c i
@@ -146,8 +193,7 @@ jobs:
           kubectl wait --for=condition=available --timeout=300s "deployment/$POSTGRES_DEPLOYMENT" -n "$NAMESPACE"
 
           PF_PORT=$((15000 + RANDOM % 10000))
-          PF_LOG="/tmp/kubectl-port-forward-$$.log"
-
+          PF_LOG="/tmp/alembic-port-forward-$$.log"
           DSN="postgresql+psycopg://${DB_USER_ENC}:${DB_PASS_ENC}@127.0.0.1:${PF_PORT}/${POSTGRES_DB}"
 
           cleanup() {
@@ -188,29 +234,14 @@ jobs:
           docker run --rm --network host \
             -e DATABASE_URL="$DSN" \
             -e PYTHONDONTWRITEBYTECODE=1 \
+            -e PYTHONUNBUFFERED=1 \
             -v "$REMOTE_WORKSPACE/backend:/app/backend:ro" \
             -w /app/backend \
             "$PYTHON_IMAGE" \
-            bash -c 'pip install --no-cache-dir -r requirements.txt && echo "Current Alembic revision before upgrade:" && (alembic current || true) && alembic upgrade head && echo "Current Alembic revision after upgrade:" && alembic current'
+            sh -c 'pip install --no-cache-dir --disable-pip-version-check -r requirements.txt && echo "Current Alembic revision before upgrade:" && (alembic current || true) && alembic upgrade head && echo "Current Alembic revision after upgrade:" && alembic current'
 
           echo "✅ Alembic migrations applied successfully."
-          SCRIPT
-
-          scp -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/run-alembic-migrations.sh \
-            "$REMOTE_USER@$REMOTE_SERVER:/tmp/run-alembic-migrations.sh"
-
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
-            REMOTE_WORKSPACE="$REMOTE_WORKSPACE" \
-            NAMESPACE="$NAMESPACE" \
-            POSTGRES_DEPLOYMENT="$POSTGRES_DEPLOYMENT" \
-            POSTGRES_SERVICE="$POSTGRES_SERVICE" \
-            POSTGRES_DB="$POSTGRES_DB" \
-            PYTHON_IMAGE="$PYTHON_IMAGE" \
-            BUILD_ID="$BUILD_ID" \
-            bash /tmp/run-alembic-migrations.sh
-
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
-            "rm -f /tmp/run-alembic-migrations.sh"
+          ENDSSH
 
       - name: Cleanup Remote Workspace
         if: always()
@@ -226,5 +257,5 @@ jobs:
             exit 0
           fi
 
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" \
             "rm -rf '$REMOTE_WORKSPACE'" || true
