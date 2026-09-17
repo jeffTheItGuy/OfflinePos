@@ -42,8 +42,9 @@ spec:
                 secretKeyRef:
                   name: offlinepos-secrets
                   key: DATABASE_PASSWORD
+            # Changed from psycopg2 to psycopg to match requirements.txt (psycopg v3)
             - name: DATABASE_URL
-              value: "postgresql+psycopg2://$(DATABASE_USER):$(DATABASE_PASSWORD)@offlinepos-postgresql-svc:5432/{{ .Values.env.POSTGRES_DB }}"
+              value: "postgresql+psycopg://$(DATABASE_USER):$(DATABASE_PASSWORD)@offlinepos-postgresql-svc:5432/{{ .Values.env.POSTGRES_DB }}"
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}

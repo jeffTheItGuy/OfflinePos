@@ -145,6 +145,9 @@ jobs:
           export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
           cd "$REMOTE_WORKSPACE"
+          
+          # FIX: Resolve to an absolute path so Docker bind mounts work correctly
+          WORKSPACE_ABS="$(pwd)"
 
           if ! command -v docker >/dev/null 2>&1; then
             echo "❌ docker is not available on the remote server." >&2
@@ -235,7 +238,7 @@ jobs:
             -e DATABASE_URL="$DSN" \
             -e PYTHONDONTWRITEBYTECODE=1 \
             -e PYTHONUNBUFFERED=1 \
-            -v "$REMOTE_WORKSPACE/backend:/app/backend:ro" \
+            -v "$WORKSPACE_ABS/backend:/app/backend:ro" \
             -w /app/backend \
             "$PYTHON_IMAGE" \
             sh -c 'pip install --no-cache-dir --disable-pip-version-check -r requirements.txt && echo "Current Alembic revision before upgrade:" && (alembic current || true) && alembic upgrade head && echo "Current Alembic revision after upgrade:" && alembic current'
