@@ -30,12 +30,45 @@ jobs:
             echo "REMOTE_SSH secret is missing." >&2
             exit 1
           fi
+          if [ -z "${REMOTE_SERVER:-}" ]; then
+            echo "REMOTE_SERVER secret is missing." >&2
+            exit 1
+          fi
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           printf '%s\n' "$REMOTE_SSH" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "$REMOTE_SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
+          
+          for i in 1 2 3; do
+            if ssh-keyscan -H "$REMOTE_SERVER" >> ~/.ssh/known_hosts 2>/dev/null; then
+              echo "Host key captured."
+              break
+            fi
+            echo "ssh-keyscan attempt $i failed."
+            if [ "$i" -eq 3 ]; then
+              echo "❌ Could not reach $REMOTE_SERVER:22 for ssh-keyscan." >&2
+              exit 1
+            fi
+            sleep 10
+          done
           chmod 644 ~/.ssh/known_hosts
+
+      - name: Test SSH connectivity
+        env:
+          REMOTE_SERVER: ${{ secrets.REMOTE_SERVER }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$REMOTE_USER@$REMOTE_SERVER" "echo SSH OK"; then
+              echo "✅ SSH connectivity confirmed."
+              exit 0
+            fi
+            echo "⚠️ SSH connectivity attempt $i failed. Retrying in 10s..."
+            sleep 10
+          done
+          echo "❌ Could not SSH to $REMOTE_SERVER after 5 attempts." >&2
+          exit 1
 
       - name: Copy Files to Remote
         env:
@@ -44,12 +77,19 @@ jobs:
           REMOTE_WORKSPACE: ${{ secrets.REMOTE_DEPLOY_DIR }}/api-${{ github.run_id }}
         run: |
           set -euo pipefail
+          
+          # FIX: Removed '$REMOTE_WORKSPACE/backend' from mkdir
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
-            "rm -rf '$REMOTE_WORKSPACE' && mkdir -p '$REMOTE_WORKSPACE/.helm' '$REMOTE_WORKSPACE/backend' '$REMOTE_WORKSPACE/.docker/prod'"
+            "rm -rf '$REMOTE_WORKSPACE' && mkdir -p '$REMOTE_WORKSPACE/.helm' '$REMOTE_WORKSPACE/.docker/prod'"
+            
           scp -o BatchMode=yes -o StrictHostKeyChecking=yes -r .helm/api \
             "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/.helm/"
+            
+          # CRITICAL FIX: Dump backend contents directly into the workspace root
+          # so Docker can find 'requirements.txt' and 'app/'
           scp -o BatchMode=yes -o StrictHostKeyChecking=yes -r backend/* \
-            "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/backend/"
+            "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/"
+            
           scp -o BatchMode=yes -o StrictHostKeyChecking=yes .docker/prod/prod-api.Dockerfile \
             "$REMOTE_USER@$REMOTE_SERVER:$REMOTE_WORKSPACE/.docker/prod/"
 
@@ -78,35 +118,4 @@ jobs:
           docker system prune -f
           docker builder prune -f
 
-          docker build --no-cache -f .docker/prod/prod-api.Dockerfile -t "offlinepos-api:$BUILD_ID" .
-          docker save "offlinepos-api:$BUILD_ID" | k3s ctr images import -
-
-          TIMESTAMP=$(date +%s)
-
-          helm upgrade --install "$RELEASE_NAME" .helm/api \
-            --namespace "$NAMESPACE" \
-            --set namespace="$NAMESPACE" \
-            --set restartTimestamp="$TIMESTAMP" \
-            --set restartReason="$RESTART_REASON" \
-            --set image.repository="offlinepos-api" \
-            --set image.tag="$BUILD_ID" \
-            --set image.pullPolicy="Never" \
-            --timeout=600s
-
-          kubectl wait --for=condition=available --timeout=300s "deployment/$DEPLOYMENT_NAME" -n "$NAMESPACE" || (
-            kubectl logs -n "$NAMESPACE" -l "app=$DEPLOYMENT_NAME" --tail=50 || true
-            helm rollback "$RELEASE_NAME" -n "$NAMESPACE"
-            exit 1
-          )
-          ENDSSH
-
-      - name: Cleanup Remote Workspace
-        if: always()
-        env:
-          REMOTE_SERVER: ${{ secrets.REMOTE_SERVER }}
-          REMOTE_USER: ${{ secrets.REMOTE_USER }}
-          REMOTE_WORKSPACE: ${{ secrets.REMOTE_DEPLOY_DIR }}/api-${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_USER@$REMOTE_SERVER" \
-            "rm -rf '$REMOTE_WORKSPACE'"
+          docker build --no-cache -f .docker/prod/pro
