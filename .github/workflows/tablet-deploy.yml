@@ -1,0 +1,105 @@
+name: Tablet APK Deploy
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Backend URL baked into the APK"
+        required: false
+        default: "https://offlinepos.nimbusurf.com"
+
+permissions:
+  contents: read
+
+env:
+  BUILD_ID: ${{ github.run_id }}-${{ github.run_number }}
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Build APK via EAS
+        working-directory: app
+        env:
+          EXPO_PUBLIC_BASE_URL: ${{ inputs.base_url }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          npx eas build \
+            --platform android \
+            --profile preview \
+            --non-interactive \
+            --output harbor-pos.apk
+
+      - name: Setup SSH
+        env:
+          REMOTE_SSH: ${{ secrets.REMOTE_SSH }}
+          REMOTE_SERVER: ${{ secrets.REMOTE_SERVER }}
+        run: |
+          set -euo pipefail
+          if [ -z "${REMOTE_SSH:-}" ]; then
+            echo "REMOTE_SSH secret is missing." >&2
+            exit 1
+          fi
+          if [ -z "${REMOTE_SERVER:-}" ]; then
+            echo "REMOTE_SERVER secret is missing." >&2
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$REMOTE_SSH" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$REMOTE_SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Upload APK to Remote Server
+        env:
+          REMOTE_SERVER: ${{ secrets.REMOTE_SERVER }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+        run: |
+          set -euo pipefail
+          : "${REMOTE_SERVER:?REMOTE_SERVER secret is missing}"
+          : "${REMOTE_USER:?REMOTE_USER secret is missing}"
+
+          # Ensure the downloads directory exists
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$REMOTE_USER@$REMOTE_SERVER" \
+            "mkdir -p /srv/downloads"
+
+          # Upload the APK
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            app/harbor-pos.apk \
+            "$REMOTE_USER@$REMOTE_SERVER:/srv/downloads/harbor-pos-${{ env.BUILD_ID }}.apk"
+
+          # Update the "latest" symlink
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$REMOTE_USER@$REMOTE_SERVER" \
+            "ln -sf harbor-pos-${{ env.BUILD_ID }}.apk /srv/downloads/harbor-pos-latest.apk"
+
+          # Write a version manifest the tablets can poll
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$REMOTE_USER@$REMOTE_SERVER" \
+            "echo '{\"version\":\"${{ env.BUILD_ID }}\",\"url\":\"/downloads/harbor-pos-latest.apk\"}' > /srv/downloads/version.json"
+
+      - name: Verify Download
+        env:
+          REMOTE_SERVER: ${{ secrets.REMOTE_SERVER }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$REMOTE_USER@$REMOTE_SERVER" \
+            "ls -la /srv/downloads/ && cat /srv/downloads/version.json"

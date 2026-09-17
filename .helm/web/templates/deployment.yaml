@@ -44,6 +44,9 @@ spec:
               mountPath: /var/run
             - name: nginx-logs
               mountPath: /var/log/nginx
+            - name: downloads
+              mountPath: /srv/downloads
+              readOnly: true
           resources: {{ toYaml .Values.resources | nindent 12 }}
           readinessProbe:
             httpGet:
@@ -72,3 +75,7 @@ spec:
           emptyDir: {}
         - name: nginx-logs
           emptyDir: {}
+        - name: downloads
+          hostPath:
+            path: /srv/downloads
+            type: DirectoryOrCreate
