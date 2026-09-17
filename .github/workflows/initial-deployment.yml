@@ -1,0 +1,311 @@
+name: Initial Deploy (Full Stack)
+on:
+  workflow_dispatch:
+    inputs:
+      skip_tablet:
+        description: "Skip tablet APK build (set to true for infrastructure-only deploys)"
+        required: false
+        default: "false"
+        type: boolean
+
+permissions:
+  contents: read
+  actions: write  # required to trigger other workflows via API
+
+env:
+  POLL_INTERVAL: 15  # seconds between status checks
+  MAX_WAIT: 900      # 15 minutes max per step
+
+jobs:
+  # ── Step 1: Secrets ──────────────────────────────────────────────────
+  deploy-secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Secrets Deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run "k3s-secrets-deploy.yml" \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.ref }}"
+          echo "✅ Secrets deploy triggered"
+
+      - name: Wait for Secrets Deploy to complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for k3s-secrets-deploy.yml to finish..."
+          for i in $(seq 1 ${{ env.MAX_WAIT }}); do
+            sleep ${{ env.POLL_INTERVAL }}
+            STATUS=$(gh run list \
+              --repo "${{ github.repository }}" \
+              --workflow="k3s-secrets-deploy.yml" \
+              --limit 1 \
+              --json status,conclusion \
+              --jq '.[0] | "\(.status)|\(.conclusion)"')
+            STATE="${STATUS%%|*}"
+            CONCLUSION="${STATUS##*|}"
+            if [ "$STATE" = "completed" ]; then
+              if [ "$CONCLUSION" = "success" ]; then
+                echo "✅ Secrets deployed successfully"
+                exit 0
+              else
+                echo "❌ Secrets deploy failed with: $CONCLUSION"
+                exit 1
+              fi
+            fi
+            echo "  …still $STATE ($(($i * ${{ env.POLL_INTERVAL }}))s elapsed)"
+          done
+          echo "❌ Timed out waiting for secrets deploy"
+          exit 1
+
+  # ── Step 2: PostgreSQL ───────────────────────────────────────────────
+  deploy-postgresql:
+    runs-on: ubuntu-latest
+    needs: deploy-secrets
+    steps:
+      - name: Trigger PostgreSQL Deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run "postgresql-deploy.yml" \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.ref }}"
+          echo "✅ PostgreSQL deploy triggered"
+
+      - name: Wait for PostgreSQL Deploy to complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for postgresql-deploy.yml to finish..."
+          for i in $(seq 1 ${{ env.MAX_WAIT }}); do
+            sleep ${{ env.POLL_INTERVAL }}
+            STATUS=$(gh run list \
+              --repo "${{ github.repository }}" \
+              --workflow="postgresql-deploy.yml" \
+              --limit 1 \
+              --json status,conclusion \
+              --jq '.[0] | "\(.status)|\(.conclusion)"')
+            STATE="${STATUS%%|*}"
+            CONCLUSION="${STATUS##*|}"
+            if [ "$STATE" = "completed" ]; then
+              if [ "$CONCLUSION" = "success" ]; then
+                echo "✅ PostgreSQL deployed successfully"
+                exit 0
+              else
+                echo "❌ PostgreSQL deploy failed with: $CONCLUSION"
+                exit 1
+              fi
+            fi
+            echo "  …still $STATE ($(($i * ${{ env.POLL_INTERVAL }}))s elapsed)"
+          done
+          echo "❌ Timed out waiting for PostgreSQL deploy"
+          exit 1
+
+  # ── Step 3: Database Migrations ──────────────────────────────────────
+  run-migrations:
+    runs-on: ubuntu-latest
+    needs: deploy-postgresql
+    steps:
+      - name: Trigger Migrations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run "migrations.yml" \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.ref }}"
+          echo "✅ Migrations triggered"
+
+      - name: Wait for Migrations to complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for migrations.yml to finish..."
+          for i in $(seq 1 ${{ env.MAX_WAIT }}); do
+            sleep ${{ env.POLL_INTERVAL }}
+            STATUS=$(gh run list \
+              --repo "${{ github.repository }}" \
+              --workflow="migrations.yml" \
+              --limit 1 \
+              --json status,conclusion \
+              --jq '.[0] | "\(.status)|\(.conclusion)"')
+            STATE="${STATUS%%|*}"
+            CONCLUSION="${STATUS##*|}"
+            if [ "$STATE" = "completed" ]; then
+              if [ "$CONCLUSION" = "success" ]; then
+                echo "✅ Migrations applied successfully"
+                exit 0
+              else
+                echo "❌ Migrations failed with: $CONCLUSION"
+                exit 1
+              fi
+            fi
+            echo "  …still $STATE ($(($i * ${{ env.POLL_INTERVAL }}))s elapsed)"
+          done
+          echo "❌ Timed out waiting for migrations"
+          exit 1
+
+  # ── Step 4: API ──────────────────────────────────────────────────────
+  deploy-api:
+    runs-on: ubuntu-latest
+    needs: run-migrations
+    steps:
+      - name: Trigger API Deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run "api-deploy.yml" \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.ref }}"
+          echo "✅ API deploy triggered"
+
+      - name: Wait for API Deploy to complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for api-deploy.yml to finish..."
+          for i in $(seq 1 ${{ env.MAX_WAIT }}); do
+            sleep ${{ env.POLL_INTERVAL }}
+            STATUS=$(gh run list \
+              --repo "${{ github.repository }}" \
+              --workflow="api-deploy.yml" \
+              --limit 1 \
+              --json status,conclusion \
+              --jq '.[0] | "\(.status)|\(.conclusion)"')
+            STATE="${STATUS%%|*}"
+            CONCLUSION="${STATUS##*|}"
+            if [ "$STATE" = "completed" ]; then
+              if [ "$CONCLUSION" = "success" ]; then
+                echo "✅ API deployed successfully"
+                exit 0
+              else
+                echo "❌ API deploy failed with: $CONCLUSION"
+                exit 1
+              fi
+            fi
+            echo "  …still $STATE ($(($i * ${{ env.POLL_INTERVAL }}))s elapsed)"
+          done
+          echo "❌ Timed out waiting for API deploy"
+          exit 1
+
+  # ── Step 5: Web ──────────────────────────────────────────────────────
+  deploy-web:
+    runs-on: ubuntu-latest
+    needs: deploy-api
+    steps:
+      - name: Trigger Web Deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run "web-deploy.yml" \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.ref }}"
+          echo "✅ Web deploy triggered"
+
+      - name: Wait for Web Deploy to complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for web-deploy.yml to finish..."
+          for i in $(seq 1 ${{ env.MAX_WAIT }}); do
+            sleep ${{ env.POLL_INTERVAL }}
+            STATUS=$(gh run list \
+              --repo "${{ github.repository }}" \
+              --workflow="web-deploy.yml" \
+              --limit 1 \
+              --json status,conclusion \
+              --jq '.[0] | "\(.status)|\(.conclusion)"')
+            STATE="${STATUS%%|*}"
+            CONCLUSION="${STATUS##*|}"
+            if [ "$STATE" = "completed" ]; then
+              if [ "$CONCLUSION" = "success" ]; then
+                echo "✅ Web deployed successfully"
+                exit 0
+              else
+                echo "❌ Web deploy failed with: $CONCLUSION"
+                exit 1
+              fi
+            fi
+            echo "  …still $STATE ($(($i * ${{ env.POLL_INTERVAL }}))s elapsed)"
+          done
+          echo "❌ Timed out waiting for Web deploy"
+          exit 1
+
+  # ── Step 6: Tablet APK (optional) ────────────────────────────────────
+  deploy-tablet:
+    runs-on: ubuntu-latest
+    needs: deploy-web
+    if: ${{ inputs.skip_tablet != 'true' }}
+    steps:
+      - name: Trigger Tablet APK Deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run "tablet-deploy.yml" \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.ref }}" \
+            --field base_url="https://offlinepos.nimbusurf.com"
+          echo "✅ Tablet APK build triggered"
+
+      - name: Wait for Tablet Deploy to complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for tablet-deploy.yml to finish..."
+          for i in $(seq 1 ${{ env.MAX_WAIT }}); do
+            sleep ${{ env.POLL_INTERVAL }}
+            STATUS=$(gh run list \
+              --repo "${{ github.repository }}" \
+              --workflow="tablet-deploy.yml" \
+              --limit 1 \
+              --json status,conclusion \
+              --jq '.[0] | "\(.status)|\(.conclusion)"')
+            STATE="${STATUS%%|*}"
+            CONCLUSION="${STATUS##*|}"
+            if [ "$STATE" = "completed" ]; then
+              if [ "$CONCLUSION" = "success" ]; then
+                echo "✅ Tablet APK built and uploaded"
+                exit 0
+              else
+                echo "❌ Tablet deploy failed with: $CONCLUSION"
+                exit 1
+              fi
+            fi
+            echo "  …still $STATE ($(($i * ${{ env.POLL_INTERVAL }}))s elapsed)"
+          done
+          echo "❌ Timed out waiting for tablet deploy"
+          exit 1
+
+  # ── Summary ──────────────────────────────────────────────────────────
+  summary:
+    runs-on: ubuntu-latest
+    needs: [deploy-secrets, deploy-postgresql, run-migrations, deploy-api, deploy-web, deploy-tablet]
+    if: always()
+    steps:
+      - name: Deployment Summary
+        run: |
+          echo "═══════════════════════════════════════════"
+          echo "  INITIAL DEPLOYMENT SUMMARY"
+          echo "═══════════════════════════════════════════"
+          echo ""
+          echo "  1. Secrets:       ${{ needs.deploy-secrets.result }}"
+          echo "  2. PostgreSQL:    ${{ needs.deploy-postgresql.result }}"
+          echo "  3. Migrations:    ${{ needs.run-migrations.result }}"
+          echo "  4. API:           ${{ needs.deploy-api.result }}"
+          echo "  5. Web:           ${{ needs.deploy-web.result }}"
+          echo "  6. Tablet APK:    ${{ needs.deploy-tablet.result || 'skipped' }}"
+          echo ""
+          echo "═══════════════════════════════════════════"
+          echo ""
+          echo "  🌐 Web:    https://offlinepos.nimbusurf.com"
+          echo "  🍳 Kitchen: https://offlinepos.nimbusurf.com/kitchen"
+          echo "  ⚙️  Admin:  https://offlinepos.nimbusurf.com/admin"
+          echo "  📱 Tablet: https://offlinepos.nimbusurf.com/downloads/harbor-pos-latest.apk"
+          echo ""
+          echo "═══════════════════════════════════════════"
